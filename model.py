@@ -3,6 +3,7 @@ import torch
 import torchvision.transforms as transforms
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.models as models
 
 class LSTM(nn.Module):
 
@@ -28,6 +29,7 @@ class CNN2LSTMCTC(nn.Module):
         self.img_con3 = self.conv3d_avg(64, 256)
         self.lstm = LSTM(10 + 256, hidden_size, output_size, opts)
         self.liner = nn.Linear(136, 10)
+        self.dropout = nn.Dropout(p=0.5, inplace=False)
         # self.img_con4 = self.conv3d_max(128, 256, pooling=(1, 2, 2))
 
     def conv3d_max(self, in_channels: int, out_channels: int, pooling: Tuple[int, int, int]) -> nn.Sequential:
@@ -58,6 +60,7 @@ class CNN2LSTMCTC(nn.Module):
         img = torch.permute(img, (0, 2, 1, 3, 4))
         img = torch.flatten(img, start_dim=2)
         dlib = self.liner(dlib)
+        dlib = self.dropout(dlib)
         x = torch.cat([img, dlib], axis=2)
         x = self.lstm(x)
         return x
@@ -132,4 +135,17 @@ class CNN3LSTMCTC(nn.Module):
         dlib = torch.flatten(dlib, start_dim=2)
         x = torch.cat([img, dlib], axis=2)
         x = self.lstm(x)
+        return x
+
+class CNNConformer(nn.Module):
+
+    def __init__(self, hidden_size, output_size, opts) -> None:
+        super(CNNConformer,self).__init__()
+        self.resnet_18 = models.resnet18(pretrained=True)
+        self.modules = list(self.resnet_18.children())[:-1]
+        self.visionMLP = nn.Sequential(*self.modules) # dim=2048
+
+    def forward(self, img, dlib):
+        print(img.size())
+        img = self.visionMLP(img)
         return x
