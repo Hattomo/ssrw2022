@@ -7,8 +7,8 @@ import torchvision
 from torchvision import transforms
 from tqdm import tqdm
 
-image_path = "/mnt/gold4TB/dataset/ROHAN4600/train/video"
-video_path = "/media/hattori/New Volume/ROHAN4600/train/tensor/"
+image_path = "../data/ROHAN4600/train/video"
+video_path = "../data/ROHAN4600/train/tensor/"
 # path_data = glob.glob('*.png')
 path_data = sorted(glob.glob(f'{image_path}/*'))
 
