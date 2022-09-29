@@ -121,5 +121,5 @@ dependencies:
     - certifi==2022.9.14
     - torch-tb-profiler==0.4.0
     - torchinfo==1.7.0
-    - torchvision==0.14.0a0+6ebbdfe
+    - torchvision==0.13.0
 prefix: /home/hattori/anaconda3/envs/ssrw
