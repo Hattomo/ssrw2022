@@ -8,6 +8,7 @@ Etudeの`~/users/ssrw2022`を個人のPCの好きなところにコピーする
 
 ```
 conda env create -f environment.yml
+git pull origin main
 
 git branch -b <branch name>
 git add .
