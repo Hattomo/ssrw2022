@@ -20,15 +20,15 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser.add_argument('--amp', default=False, type=bool, help="amp")
     # Dataset path
     parser.add_argument('--label',
-                        default="/media/hattori/New Volume/ROHAN4600/train/ROHAN4600_zundamon_voice_label/*",
+                        default="data/ROHAN4600/train/ROHAN4600_zundamon_voice_label/*",
                         type=str,
                         help="label")
     parser.add_argument('--image-path',
-                        default='/media/hattori/New Volume/ROHAN4600/train/tensor/*',
+                        default='data/ROHAN4600/train/tensor/*',
                         type=str,
                         help="train image path")
     parser.add_argument('--csv-path',
-                        default='/media/hattori/New Volume/ROHAN4600/train/csv/*',
+                        default='data/ROHAN4600/train/csv/*',
                         type=str,
                         help="train csv path")
 

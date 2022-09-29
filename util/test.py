@@ -3,7 +3,7 @@
 import torchvision
 import torch
 
-video_path = "/mnt/gold4TB/dataset/ROHAN4600/train/video/0001.mp4"
+video_path = "../data/ROHAN4600/train/video/0001.mp4"
 reader = torchvision.io.VideoReader(video_path, "video")
 # video = torchvision.io.read_video(video_path, pts_unit='sec', output_format="TCHW")[0]
 video = video.to('cuda:0')
