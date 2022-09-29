@@ -23,7 +23,7 @@ from torchinfo import summary
 from my_args import get_parser, set_debug_mode, set_release_mode
 from my_utils import my_util
 from my_dataset_av import MyCollator, ROHANDataset
-from model import CNN3LSTMCTC, CNN2LSTMCTC
+from model import CNN3LSTMCTC, CNN2LSTMCTC, CNNConformer
 import makelabel
 import data_transform
 from torchinfo import summary
