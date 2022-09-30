@@ -253,7 +253,7 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
             ter = my_util.calculate_error(pred, label)
             data_manager.update_acc(ter, batch_size)
             result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
-                pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n" + "WER : " + "\n\n"
+                pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
         result_logger.info(result_text)
         ctc_loss.backward()  # calculate gradients
         # scaler.unscale_(optimizer)
@@ -322,7 +322,7 @@ def valid(loader, model, criterion, epoch):
                 ter = my_util.calculate_error(pred, label)
                 data_manager.update_acc(ter, batch_size)
                 result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
-                    pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n" + "WER : " + "\n\n"
+                    pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
             result_logger.info(result_text)
             # measure performance and record loss
             data_manager.update_loss(ctc_loss.data.item(), batch_size)
