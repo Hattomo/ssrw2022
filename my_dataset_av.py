@@ -46,6 +46,6 @@ class MyCollator(object):
         inputs = rnn.pad_sequence(inputs, batch_first=True)
         max_len_label = max([len(label) for label in targets])
         for index, label in enumerate(targets):
-            label += [self.phones.index("sil") for x in range(max_len_label - len(label))]
+            label += [self.phones.index("_") for x in range(max_len_label - len(label))]
         targets = torch.tensor([label for label in targets])
         return inputs, targets, torch.tensor(input_lengths), torch.tensor(target_lengths), dlib

@@ -172,7 +172,7 @@ model = CNN2LSTMCTC(opts.lstm_hidden, output_size, opts).to(DEVICE)
 progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
 
 #- Set Loss func
-criterion = nn.CTCLoss(blank=phones.index('sil'), zero_infinity=True)
+criterion = nn.CTCLoss(blank=phones.index('_'), zero_infinity=False)
 
 # 保存したものがあれば呼び出す
 progress_logger.info("call out checkpoint if exists...")
@@ -202,7 +202,7 @@ def format_outputs(verbose):
     for i in range(1, len(verbose)):
         if verbose[i] != predict[-1]:
             predict.append(verbose[i])
-    predict = [l for l in predict if l != phones.index('sil')]
+    predict = [l for l in predict if l != phones.index('_')]
     return predict
 
 def train(loader, model, criterion, optimizer, scaler, epoch):
@@ -319,7 +319,7 @@ def valid(loader, model, criterion, epoch):
                 pred = format_outputs(output)
                 output = [phones[l] for l in output]
                 pred = [phones[l] for l in pred]
-                label = [phones[l] for l in label if phones[l] not in "sil"]
+                label = [phones[l] for l in label if phones[l] not in "_"]
                 ter = my_util.calculate_error(pred, label)
                 data_manager.update_acc(ter, batch_size)
                 result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
@@ -379,7 +379,7 @@ def test(loader, model):
                 pred = format_outputs(output)
                 output = [phones[l] for l in output]
                 pred = [phones[l] for l in pred]
-                label = [phones[l] for l in label if phones[l] not in "sil"]
+                label = [phones[l] for l in label if phones[l] not in "_"]
                 ter = my_util.calculate_error(pred, label)
                 data_manager.update_acc(ter, batch_size)
                 result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
