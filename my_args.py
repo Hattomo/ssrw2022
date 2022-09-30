@@ -52,14 +52,14 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser.add_argument('--resume', default='', type=str, help="resume checkpoint path")
     parser.add_argument('--token', default=f"build/{time}/token.json", type=str, help="token path")
     # Optimizer
-    parser.add_argument('--lr', default=1e-3, type=float, help="学習率")  # d: 0.0001
+    parser.add_argument('--lr', default=1e-4, type=float, help="学習率")  # d: 0.0001
     parser.add_argument('--momentum', default=0.9, type=float, help="モメンタム")
     parser.add_argument('--weight_decay', default=0, type=float, help="weight decay")
     parser.add_argument('--clip', default=5.0, type=float, help="")
     # other
     parser.add_argument('--seed', default=2, type=int, help="randomのseed")
     parser.add_argument('--cpu', action='store_true', help="cpuで動作させたい場合")
-    parser.add_argument('--device', default="cuda:1", help="device")
+    parser.add_argument('--device', default="", help="device")
 
     return parser
 
