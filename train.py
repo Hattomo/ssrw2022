@@ -56,14 +56,15 @@ progress_logger.info(f"Start Time: {start_time}")
 torch.manual_seed(opts.seed)
 progress_logger.info(f"opts -> {opts}")
 
-# yapf : disable
+# yapf: disable
 progress_logger.info(f"Machine    : {platform.machine()},\n\
 Processor  : {platform.processor()},\n\
 Platform   : {platform.platform()},\n\
 Machine    : {platform.machine()},\n\
 python     : {platform.python_version()},\n\
-Pytorch    : {torch.__version__}"                                 )
-# yapf : enable
+Pytorch    : {torch.__version__}")
+# yapf: enable
+
 
 # save args
 with open(f"{opts.base_path}/args.json", 'wt') as f:
@@ -172,6 +173,19 @@ progress_logger.info(f"Model : {model}")
 # TODO: Use torch summary (info?)
 # progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
 
+for param in model.efficient_net.parameters():
+    param.requires_grad = False
+for param in model.efficient_net._fc.parameters():
+    param.requires_grad = True
+for param in model.efficient_net._bn1.parameters():
+    param.requires_grad = True
+for param in model.efficient_net._conv_head.parameters():
+    param.requires_grad = True
+for param in model.efficient_net._blocks[-1].parameters():
+    param.requires_grad = True
+for param in model.efficient_net._blocks[-2].parameters():
+    param.requires_grad = True
+
 #- Set Loss func
 criterion = nn.CTCLoss(blank=phones.index('_'), zero_infinity=True)
 
@@ -236,7 +250,7 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
         if opts.mode == "FV":
             inputs = inputs.to(DEVICE, non_blocking=True).float()
             dlib = dlib.to(DEVICE, non_blocking=True).float()
-            outputs = model(inputs, dlib, input_lengths)
+            outputs = model(inputs, dlib, input_lengths,True)
         batch_size = inputs.size(0)
         outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
         ctc_loss = criterion(outputs_, targets, input_lengths, target_lengths)
@@ -304,7 +318,7 @@ def valid(loader, model, criterion, epoch):
             if opts.mode == "FV":
                 inputs = inputs.to(DEVICE, non_blocking=True).float()
                 dlib = dlib.to(DEVICE, non_blocking=True).float()
-                outputs = model(inputs, dlib, input_lengths)
+                outputs = model(inputs, dlib, input_lengths,False)
             # 結果保存用
             batch_size = inputs.size(0)
             outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
@@ -365,7 +379,7 @@ def test(loader, model):
             if opts.mode == "FV":
                 inputs = inputs.to(DEVICE, non_blocking=True).float()
                 dlib = dlib.to(DEVICE, non_blocking=True).float()
-                outputs = model(inputs, dlib, input_lengths)
+                outputs = model(inputs, dlib, input_lengths,False)
             # 結果保存用
             batch_size = inputs.size(0)
             # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))

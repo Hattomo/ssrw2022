@@ -41,12 +41,12 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     # model
     parser.add_argument('--lstm-layer', default=2, type=int, help="LSTM layer")
     parser.add_argument('--lstm-hidden', default=100, type=int, help="LSTM hidden size")
-    parser.add_argument('--batch_size', default=8, type=int, help="batch size")
+    parser.add_argument('--batch_size', default=16, type=int, help="batch size")
     # training
     parser.add_argument('--train-size', default=(0, 4480), type=tuple, help="train-size")
     parser.add_argument('--valid-size', default=(4480, 4580), type=tuple, help="valid-size")
     parser.add_argument('--test-size', default=(4580, 4600), type=tuple, help="test-size")
-    parser.add_argument('--patience', default=100, type=int, help="patience")
+    parser.add_argument('--patience', default=25, type=int, help="patience")
     parser.add_argument('--end_epoch', default=40000, type=int, help="epoch")  # d: 720
     parser.add_argument('--start_epoch', default=0, type=int, help="start epoch")
     parser.add_argument('--resume', default='', type=str, help="resume checkpoint path")
@@ -59,7 +59,7 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     # other
     parser.add_argument('--seed', default=2, type=int, help="randomのseed")
     parser.add_argument('--cpu', action='store_true', help="cpuで動作させたい場合")
-    parser.add_argument('--device', default="", help="device")
+    parser.add_argument('--device', default="cuda:1", help="device")
 
     return parser
 
