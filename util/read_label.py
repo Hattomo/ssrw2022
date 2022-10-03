@@ -3,7 +3,7 @@
 import glob
 from tqdm import tqdm
 
-path_list = glob.glob('/mnt/gold4TB/dataset/ROHAN4600/train/ROHAN4600_zundamon_voice_label/*')
+path_list = glob.glob('../data/ROHAN4600/train/ROHAN4600_zundamon_voice_label/*')
 
 phones = []
 

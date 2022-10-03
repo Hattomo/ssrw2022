@@ -20,15 +20,15 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser.add_argument('--amp', default=False, type=bool, help="amp")
     # Dataset path
     parser.add_argument('--label',
-                        default="/media/hattori/New Volume/ROHAN4600/train/ROHAN4600_zundamon_voice_label/*",
+                        default="data/ROHAN4600/train/ROHAN4600_zundamon_voice_label/*",
                         type=str,
                         help="label")
     parser.add_argument('--image-path',
-                        default='/media/hattori/New Volume/ROHAN4600/train/tensor/*',
+                        default='data/ROHAN4600/train/tensor/*',
                         type=str,
                         help="train image path")
     parser.add_argument('--csv-path',
-                        default='/media/hattori/New Volume/ROHAN4600/train/csv/*',
+                        default='data/ROHAN4600/train/csv/*',
                         type=str,
                         help="train csv path")
 
@@ -39,7 +39,7 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser.add_argument('--logger-config-path', default=f'assets/log_config.json', type=str, help="logger config path")
     parser.add_argument('--base-path', default=f"build/{time}/", type=str, help="logger build path")
     # model
-    parser.add_argument('--lstm-layer', default=3, type=int, help="LSTM layer")
+    parser.add_argument('--lstm-layer', default=2, type=int, help="LSTM layer")
     parser.add_argument('--lstm-hidden', default=100, type=int, help="LSTM hidden size")
     parser.add_argument('--batch_size', default=8, type=int, help="batch size")
     # training
@@ -52,7 +52,7 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser.add_argument('--resume', default='', type=str, help="resume checkpoint path")
     parser.add_argument('--token', default=f"build/{time}/token.json", type=str, help="token path")
     # Optimizer
-    parser.add_argument('--lr', default=1e-5, type=float, help="学習率")  # d: 0.0001
+    parser.add_argument('--lr', default=1e-3, type=float, help="学習率")  # d: 0.0001
     parser.add_argument('--momentum', default=0.9, type=float, help="モメンタム")
     parser.add_argument('--weight_decay', default=0, type=float, help="weight decay")
     parser.add_argument('--clip', default=5.0, type=float, help="")
