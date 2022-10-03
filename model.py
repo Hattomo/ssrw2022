@@ -1,3 +1,4 @@
+import random
 from typing import Tuple
 import torch
 import torchvision.transforms as transforms
@@ -174,12 +175,14 @@ class CNNConformer(nn.Module):
         dlib = self.dropout(dlib)
         x = torch.cat([img, dlib], axis=2)
         if mode:
-            time_rand = torch.randint(size=(2,), high=img_features.size(1))
-            feature_rand = torch.randint(size=(2,), high=img_features.size(2))
-            for r in time_rand:
-                x[:, r:r + 10, :] = 0
-            for r in feature_rand:
-                x[:, :, r:r + 5] = 0
+            batch = x.size(0)
+            for i in range(batch):
+                time_rand = torch.randint(size=(random.randint(0, 3),), high=img_features.size(1))
+                feature_rand = torch.randint(size=(random.randint(0, 3),), high=img_features.size(2))
+                for r in time_rand:
+                    x[:, r:r + 10, :] = 0
+                for r in feature_rand:
+                    x[:, :, r:r + 5] = 0
         x = self.conformer(x, length)
         x = self.decoder(x[0])
         return x

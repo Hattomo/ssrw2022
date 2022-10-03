@@ -62,7 +62,7 @@ Processor  : {platform.processor()},\n\
 Platform   : {platform.platform()},\n\
 Machine    : {platform.machine()},\n\
 python     : {platform.python_version()},\n\
-Pytorch    : {torch.__version__}")
+Pytorch    : {torch.__version__}"                                 )
 # yapf: enable
 
 
