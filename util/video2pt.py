@@ -22,7 +22,7 @@ path_data = sorted(glob.glob(f'{image_path}/*.mp4'))
 
 trans = torch.nn.Sequential(
     transforms.Resize((128, 128)),
-    transforms.Grayscale(),
+    # transforms.Grayscale(),
     # transforms.ConvertImageDtype(torch.float),
     # transforms.Normalize(mean=[0.5], std=[0.5]),
 ).to(torch.device('cuda:0'))
