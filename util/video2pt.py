@@ -7,10 +7,18 @@ import torchvision
 from torchvision import transforms
 from tqdm import tqdm
 
+# zundamon, metaen, sora, itako
+# ama, sexy, normal, recitation, tsun, emoWhis
+name = "sora"
+emotion = "emoWhis"
+# image_path = f"/media/hattori/HattomoSSD/ITA/{name}/{emotion}/{emotion}"
+# video_path = f"/media/hattori/HattomoSSD/ITA/{name}/{emotion}/{emotion}"
+
 image_path = "../data/ROHAN4600/train/video"
 video_path = "../data/ROHAN4600/train/tensor/"
+
 # path_data = glob.glob('*.png')
-path_data = sorted(glob.glob(f'{image_path}/*'))
+path_data = sorted(glob.glob(f'{image_path}/*.mp4'))
 
 trans = torch.nn.Sequential(
     transforms.Resize((128, 128)),

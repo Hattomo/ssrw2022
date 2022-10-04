@@ -19,6 +19,7 @@ def get_phones_csv(label_path: str) -> list:
         for line in lines:
             phones.append(line.rstrip("\n").split(" ")[-1])
     phones = list(set(phones))
+    phones.append("_")
     return phones
 
 def get_label_csv(label_path: str, phones: list) -> list:

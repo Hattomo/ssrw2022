@@ -56,14 +56,15 @@ progress_logger.info(f"Start Time: {start_time}")
 torch.manual_seed(opts.seed)
 progress_logger.info(f"opts -> {opts}")
 
-# yapf : disable
+# yapf: disable
 progress_logger.info(f"Machine    : {platform.machine()},\n\
 Processor  : {platform.processor()},\n\
 Platform   : {platform.platform()},\n\
 Machine    : {platform.machine()},\n\
 python     : {platform.python_version()},\n\
 Pytorch    : {torch.__version__}"                                 )
-# yapf : enable
+# yapf: enable
+
 
 # save args
 with open(f"{opts.base_path}/args.json", 'wt') as f:
@@ -167,12 +168,26 @@ progress_logger.info("Defining model...")
 
 # Set model
 output_size = len(phones)
-model = CNN2LSTMCTC(opts.lstm_hidden, output_size, opts).to(DEVICE)
+model = CNNConformer(opts.lstm_hidden, output_size, opts).to(DEVICE)
+progress_logger.info(f"Model : {model}")
 # TODO: Use torch summary (info?)
-progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
+# progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
+
+for param in model.efficient_net.parameters():
+    param.requires_grad = False
+for param in model.efficient_net._fc.parameters():
+    param.requires_grad = True
+for param in model.efficient_net._bn1.parameters():
+    param.requires_grad = True
+for param in model.efficient_net._conv_head.parameters():
+    param.requires_grad = True
+for param in model.efficient_net._blocks[-1].parameters():
+    param.requires_grad = True
+for param in model.efficient_net._blocks[-2].parameters():
+    param.requires_grad = True
 
 #- Set Loss func
-criterion = nn.CTCLoss(blank=phones.index('sil'), zero_infinity=True)
+criterion = nn.CTCLoss(blank=phones.index('_'), zero_infinity=True)
 
 # 保存したものがあれば呼び出す
 progress_logger.info("call out checkpoint if exists...")
@@ -202,7 +217,7 @@ def format_outputs(verbose):
     for i in range(1, len(verbose)):
         if verbose[i] != predict[-1]:
             predict.append(verbose[i])
-    predict = [l for l in predict if l != phones.index('sil')]
+    predict = [l for l in predict if l != phones.index('_')]
     return predict
 
 def train(loader, model, criterion, optimizer, scaler, epoch):
@@ -235,11 +250,10 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
         if opts.mode == "FV":
             inputs = inputs.to(DEVICE, non_blocking=True).float()
             dlib = dlib.to(DEVICE, non_blocking=True).float()
-            outputs = model(inputs, dlib)
+            outputs = model(inputs, dlib, input_lengths,True)
         batch_size = inputs.size(0)
-        outputs = outputs.permute(1, 0, 2).log_softmax(2)
-        # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
-        ctc_loss = criterion(outputs, targets, input_lengths, target_lengths)
+        outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
+        ctc_loss = criterion(outputs_, targets, input_lengths, target_lengths)
         data_manager.update_loss(ctc_loss.data.item(), batch_size)
         result_text = ""
         for i in range(batch_size):
@@ -249,18 +263,17 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
             pred = format_outputs(output)
             output = [phones[l] for l in output]
             pred = [phones[l] for l in pred]
-            label = [phones[l] for l in label if phones[l] not in "sil"]
+            label = [phones[l] for l in label if phones[l] not in "_"]
             ter = my_util.calculate_error(pred, label)
             data_manager.update_acc(ter, batch_size)
             result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
-                pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n" + "WER : " + "\n\n"
+                pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
         result_logger.info(result_text)
-        #４つのおまじない
-        optimizer.zero_grad()  # initlaize grad
         ctc_loss.backward()  # calculate gradients
         # scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), opts.clip)  # clip gradients
         optimizer.step()
+        optimizer.zero_grad()  # initlaize grad
         # scaler.step(optimizer)
         # scaler.update()
         pbar.update(1)
@@ -305,12 +318,12 @@ def valid(loader, model, criterion, epoch):
             if opts.mode == "FV":
                 inputs = inputs.to(DEVICE, non_blocking=True).float()
                 dlib = dlib.to(DEVICE, non_blocking=True).float()
-                outputs = model(inputs, dlib)
+                outputs = model(inputs, dlib, input_lengths, False)
             # 結果保存用
             batch_size = inputs.size(0)
-            outputs = outputs.permute(1, 0, 2).log_softmax(2)
+            outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
             # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
-            ctc_loss = criterion(outputs, labels, input_lengths, target_lengths)
+            ctc_loss = criterion(outputs_, labels, input_lengths, target_lengths)
             result_text = ""
             for i in range(batch_size):
                 output = outputs[i]
@@ -319,11 +332,11 @@ def valid(loader, model, criterion, epoch):
                 pred = format_outputs(output)
                 output = [phones[l] for l in output]
                 pred = [phones[l] for l in pred]
-                label = [phones[l] for l in label if phones[l] not in "sil"]
+                label = [phones[l] for l in label if phones[l] not in "_"]
                 ter = my_util.calculate_error(pred, label)
                 data_manager.update_acc(ter, batch_size)
                 result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
-                    pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n" + "WER : " + "\n\n"
+                    pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
             result_logger.info(result_text)
             # measure performance and record loss
             data_manager.update_loss(ctc_loss.data.item(), batch_size)
@@ -366,7 +379,7 @@ def test(loader, model):
             if opts.mode == "FV":
                 inputs = inputs.to(DEVICE, non_blocking=True).float()
                 dlib = dlib.to(DEVICE, non_blocking=True).float()
-                outputs = model(inputs, dlib)
+                outputs = model(inputs, dlib, input_lengths, False)
             # 結果保存用
             batch_size = inputs.size(0)
             # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
@@ -379,7 +392,7 @@ def test(loader, model):
                 pred = format_outputs(output)
                 output = [phones[l] for l in output]
                 pred = [phones[l] for l in pred]
-                label = [phones[l] for l in label if phones[l] not in "sil"]
+                label = [phones[l] for l in label if phones[l] not in "_"]
                 ter = my_util.calculate_error(pred, label)
                 data_manager.update_acc(ter, batch_size)
                 result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
