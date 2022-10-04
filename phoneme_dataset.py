@@ -7,6 +7,8 @@ from torch.nn.utils.rnn import pad_sequence
 import random
 import pickle
 
+PAD_NUM = 54
+
 class PhonemeDataset(Dataset):
     def __init__(self, 
                  phone_dict: dict,
@@ -30,13 +32,12 @@ class PhonemeDataset(Dataset):
             for e in label:
                 tokens.append(self.dict[e])
             self.tokens_list.append(tokens)
-        self.tokens_list = torch.Tensor(self.tokens_list)
-    
+
     def __len__(self):
         return len(self.tokens_list)
     
     def __getitem__(self, index):
-        return self.tokens_list[index]
+        return torch.Tensor(self.tokens_list[index]).to(dtype=torch.int)
 
 def collate_fn(batch: torch.Tensor) -> torch.Tensor:
     """
@@ -48,8 +49,9 @@ def collate_fn(batch: torch.Tensor) -> torch.Tensor:
     Returns:
         torch.Tensor: シーケンス長が最大のものに合わせた形のバッチテンソルを返します。
     """
-    label = pad_sequence(batch, batch_first=True)
-    return label
+    lengths = torch.Tensor([len(e) for e in batch]).to(torch.int)
+    label = pad_sequence(batch, batch_first=True, padding_value=PAD_NUM)
+    return label, lengths
 
 def dataset_spliter(dataset: list, train: int=5, valid: int=3, test: int=2) -> list:
     """
@@ -71,10 +73,10 @@ def dataset_spliter(dataset: list, train: int=5, valid: int=3, test: int=2) -> l
     test_ratio = float(test)/float(all_ratio)
     all_indexes = list(range(0, dataset_size))
     train_sample = random.sample(all_indexes,
-                                     k=int(dataset_size*(train_ratio/all_ratio)))
+                                     k=int(dataset_size*(train_ratio)))
     remain_indexes = [e for e in all_indexes if not (e in train_sample)]
     valid_sample = random.sample(remain_indexes,
-                                     k=int(dataset_size*(valid_ratio/all_ratio)))
+                                     k=int(dataset_size*(valid_ratio)))
     test_sample = [e for e in remain_indexes if not (e in valid_sample)]
 
     train_list = [tokens for i, tokens in enumerate(dataset) if i in train_sample]
@@ -88,14 +90,18 @@ if __name__ == "__main__":
     """
     How to use classes
     """
-
+    BATCH_SIZE = 64
     dict_path = 'data/label.pkl'
     labels_path = 'data/phoneme.csv'
-    with open(dict_path, 'r') as f:
+    with open(dict_path, 'rb') as f:
         phone_dict = pickle.load(f)
     with open(labels_path, 'r') as f:
         csv_reader = csv.reader(f)
         datas = list(csv_reader)
-    dataset = PhonemeDataset(phone_dict, datas)
-    dataset_train, _, _ = dataset_spliter(dataset)
-    dataloader_train = DataLoader()
+    
+    datas_train, datas_valid, datas_test = dataset_spliter(datas)
+    dataset_train = PhonemeDataset(phone_dict, datas_train)
+
+    dataloader_train = DataLoader(dataset_train, shuffle=True, batch_size=BATCH_SIZE, collate_fn=collate_fn)
+    for batch in dataloader_train:
+        print(batch.shape)

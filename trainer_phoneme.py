@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from tqdm.notebook import tqdm
+# from tqdm.notebook import tqdm
+from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
-import glob
 import pickle
 import csv
 import matplotlib.pyplot as plt
@@ -72,22 +72,25 @@ class Trainer:
             print('train')
             for i, batch in enumerate(self.dataloader_train):
                 print(f'train: {i}/{len(self.dataloader_train)}')
-                data = batch
-                # ここから先書き換える
-                images = images.to(device=self.device)
-                label = label.to(device=self.device)
+                data, lengths = batch
+                data = data.to(self.device)
+                lengths = lengths.to(self.device)
+                # ここでマスク処理と化してみる。
 
+                # ここまで
                 self.optimizer.zero_grad()
                 states = self.detach(states)
-                outputs, states = self.model(images, states)
-                label_max_len = label.shape[1]
-                outputs = outputs[:,:label_max_len,:]
-                outputs = outputs.reshape(outputs.shape[0]*outputs.shape[1], outputs.shape[2])
-                label = label.reshape(label.size(0)*label.size(1))
-                label = label.to(torch.long)
-                loss = self.criterion(outputs, label)
+                outputs, states = self.model(data, states)
+                # label_max_len = data.shape[1]
+                # outputs = outputs[:,:label_max_len,:]
+                # outputs = outputs.reshape(outputs.shape[0]*outputs.shape[1], outputs.shape[2])
+                # data = data.reshape(data.size(0)*data.size(1))
+                data = data.to(torch.int)
+                outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
+                print(lengths.shape, outputs_.shape, data.shape)
+                loss = self.criterion(outputs_, data, lengths, lengths)
                 train_loss += loss.item()
-                acc = accuracy_score(label.tolist(), outputs.argmax(dim=1).tolist())
+                acc = accuracy_score(data.tolist(), outputs.argmax(dim=1).tolist())
                 train_acc += acc
                 print(f'loss: {loss}    acc: {acc}')
                 loss.backward()
@@ -128,10 +131,29 @@ class Trainer:
 
     
 if __name__ == '__main__':
-    dataset = PhonemeDataset()
-    dataloader = DataLoader(
-        dataset, batch_size=4, shuffle=True,
-        collate_fn=collate_fn
-    )
-    for batch in dataloader:
-        print(batch[0].shape)
+    BATCH_SIZE = 64
+    dict_path = 'data/label.pkl'
+    labels_path = 'data/phoneme.csv'
+    with open(dict_path, 'rb') as f:
+        phone_dict = pickle.load(f)
+    with open(labels_path, 'r') as f:
+        csv_reader = csv.reader(f)
+        datas = list(csv_reader)
+    
+    datas_train, datas_valid, datas_test = dataset_spliter(datas)
+    dataset_train = PhonemeDataset(phone_dict, datas_train)
+    dataset_valid = PhonemeDataset(phone_dict, datas_valid)
+    dataset_test = PhonemeDataset(phone_dict, datas_test)
+
+    dataloader_train = DataLoader(dataset_train,
+                                  shuffle=True,
+                                  batch_size=BATCH_SIZE,
+                                  collate_fn=collate_fn)
+    dataloader_valid = DataLoader(dataset_valid,
+                                  batch_size=BATCH_SIZE,
+                                  collate_fn=collate_fn)
+    dataloader_test  = DataLoader(dataset_test,
+                                  batch_size=BATCH_SIZE,
+                                  collate_fn=collate_fn)
+    
+    trainer = Trainer()
