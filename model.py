@@ -180,9 +180,10 @@ class CNNConformer(nn.Module):
                 time_rand = torch.randint(size=(random.randint(0, 3),), high=img_features.size(1))
                 feature_rand = torch.randint(size=(random.randint(0, 3),), high=img_features.size(2))
                 for r in time_rand:
-                    x[:, r:r + 10, :] = 0
+                    x[i, r:r + 10, :] = 0
                 for r in feature_rand:
-                    x[:, :, r:r + 5] = 0
+                    x[i, :, r:r + 5] = 0
+
         x = self.conformer(x, length)
         x = self.decoder(x[0])
         return x

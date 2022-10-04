@@ -318,7 +318,7 @@ def valid(loader, model, criterion, epoch):
             if opts.mode == "FV":
                 inputs = inputs.to(DEVICE, non_blocking=True).float()
                 dlib = dlib.to(DEVICE, non_blocking=True).float()
-                outputs = model(inputs, dlib, input_lengths,False)
+                outputs = model(inputs, dlib, input_lengths, False)
             # 結果保存用
             batch_size = inputs.size(0)
             outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
@@ -379,7 +379,7 @@ def test(loader, model):
             if opts.mode == "FV":
                 inputs = inputs.to(DEVICE, non_blocking=True).float()
                 dlib = dlib.to(DEVICE, non_blocking=True).float()
-                outputs = model(inputs, dlib, input_lengths,False)
+                outputs = model(inputs, dlib, input_lengths, False)
             # 結果保存用
             batch_size = inputs.size(0)
             # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
