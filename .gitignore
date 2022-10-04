@@ -8,3 +8,4 @@ data/
 *.mp4
 
 SSRW_env
+.DS_Store
