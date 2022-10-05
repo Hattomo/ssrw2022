@@ -10,9 +10,9 @@ from sklearn.metrics import accuracy_score
 from language_model import PhonemeLangModel
 from phoneme_dataset import PhonemeDataset, collate_fn, dataset_spliter
 
-from torchvision import transforms
 from trainer_phoneme import Trainer
 import json
+
 
 if __name__ == '__main__':
     BATCH_SIZE = 64
@@ -29,7 +29,6 @@ if __name__ == '__main__':
     with open('build/debug/token.json') as f:
         phone_dict = json.load(f)
     """
-
     datas_train, datas_valid, datas_test = dataset_spliter(datas)
     dataset_train = PhonemeDataset(phone_dict, datas_train)
     dataset_valid = PhonemeDataset(phone_dict, datas_valid)
@@ -50,7 +49,7 @@ if __name__ == '__main__':
                                   drop_last=True)
     model = PhonemeLangModel().to('cuda:0')
 
-    criterion = nn.CTCLoss(blank=phone_dict['sil'], zero_infinity=True)
+    criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     trainer = Trainer(model, dataloader_train, dataloader_valid, criterion, optimizer)
     trainer.train(EPOCHS, BATCH_SIZE)

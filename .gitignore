@@ -9,3 +9,6 @@ data/
 
 SSRW_env
 .DS_Store
+
+*.png
+*.csv

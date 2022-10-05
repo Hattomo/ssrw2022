@@ -8,7 +8,7 @@ class PhonemeLangModel(nn.Module):
                  embed_size: int=32,
                  hidden_dim_encoder: int=128,
                  hidden_dim_decoder: int=128,
-                 vocab_size: int=53+4,
+                 vocab_size: int=46,
                  max_len: int=500,
                  img_size: int=64,
                  device=torch.device('cuda:0')):
@@ -25,7 +25,7 @@ class PhonemeLangModel(nn.Module):
 
     def forward(self, x, h):
         h = self.lstm_encoder(x, h)
-        x = x[:, :-1]
+        # x = x[:, :-1]
         x, h = self.lstm_decoder(x, h)
         return x, h
 
