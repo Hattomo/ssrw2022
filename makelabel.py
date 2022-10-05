@@ -18,7 +18,7 @@ def get_phones_csv(label_path: str) -> list:
             lines = f.readlines()
         for line in lines:
             phones.append(line.rstrip("\n").split(" ")[-1])
-    phones = list(set(phones))
+    phones = sorted(list(set(phones)))
     phones.append("_")
     return phones
 
