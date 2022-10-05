@@ -24,6 +24,7 @@ class ROHANDataset(data.Dataset):
 
         self.images = sorted(glob.glob(image_path))[self.start_point:self.end_point]
         dlibs = sorted(glob.glob(csv_path))[self.start_point:self.end_point]
+
         for dlib in tqdm(dlibs):
             self.dlib.append(torch.tensor(pd.read_csv(dlib, header=None, encoding='utf-8').values)[:, :-1])
 

@@ -1,0 +1,8 @@
+{
+    "[lab]": {
+         "files.insertFinalNewline": false
+    },
+    "[txt]": {
+        "files.insertFinalNewline": false
+    }
+}

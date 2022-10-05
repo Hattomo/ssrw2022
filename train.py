@@ -112,7 +112,8 @@ progress_logger.info("Initilaize complete🎉")
 
 progress_logger.info("Start defining data loader...")
 
-phones = makelabel.get_phones_csv(opts.label)
+# phones = makelabel.get_phones_csv(opts.label, opts.train_size[0], opts.test_size[1])
+phones = makelabel.load_phones_csv()
 
 dict = {phones[i]: i for i in range(len(phones))}
 with open(opts.token, 'w') as vocab_file:
@@ -441,7 +442,7 @@ for epoch in range(opts.start_epoch, opts.end_epoch + 1):
         f'Validation: {valid_loss} (best:{"{0:,.5f}".format(best_val)}) (valtrack:{"{0:,.5f}".format(valtrack)})')
 
 my_util.load_checkpoint(best_epoch, best_val, model, opts)
-test(testloader, model, "1000-best")
+test(testloader, model, 1000)
 
 writer.close()  # close tensorboard writer
 progress_logger.info("Finish!!")

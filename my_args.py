@@ -34,9 +34,9 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser.add_argument('--lstm-hidden', default=100, type=int, help="LSTM hidden size")
     parser.add_argument('--batch_size', default=16, type=int, help="batch size")
     # training
-    parser.add_argument('--train-size', default=(2996, 7496), type=tuple, help="train-size")  # 2997(0, 7486)
-    parser.add_argument('--valid-size', default=(7496, 7596), type=tuple, help="valid-size")  # (7486, 7586)
-    parser.add_argument('--test-size', default=(7596, 7616), type=tuple, help="test-size")  # (7586, 7596)
+    parser.add_argument('--train-size', default=(2996, 7496), type=tuple, help="train-size")  # 2996(0, 7496)
+    parser.add_argument('--valid-size', default=(7496, 7596), type=tuple, help="valid-size")  # (7496, 7596)
+    parser.add_argument('--test-size', default=(7596, 7616), type=tuple, help="test-size")  # (7596, 7616)
     parser.add_argument('--patience', default=25, type=int, help="patience")
     parser.add_argument('--end_epoch', default=1000, type=int, help="epoch")  # d: 720
     parser.add_argument('--start_epoch', default=0, type=int, help="start epoch")
@@ -68,9 +68,9 @@ def set_debug_mode(opts: argparse.Namespace, log_conf: dict) -> None:
     opts.token = f"build/debug/token.json"
     os.makedirs(opts.tensorboard, exist_ok=True)
     os.makedirs(opts.checkpoint, exist_ok=True)
-    opts.train_size = (0, 200)
-    opts.valid_size = (200, 400)
-    opts.test_size = (400, 500)
+    opts.train_size = (0, 20)
+    opts.valid_size = (20, 40)
+    opts.test_size = (40, 50)
     opts.batch_size = 2
     opts.no_check = True
     opts.end_epoch = 2000
