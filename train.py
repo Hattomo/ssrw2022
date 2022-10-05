@@ -344,7 +344,7 @@ def valid(loader, model, criterion, epoch):
                                                    Acc=data_manager.acc_manager.total_error))
     return data_manager.loss_manager.loss.avg
 
-def test(loader, model):
+def test(loader, model, epoch):
     """
 
     test function for 1 epoch
@@ -397,7 +397,7 @@ def test(loader, model):
             pbar.update(1)
     pbar.close()
     data_manager.write(epoch)
-    with open(f"{opts.base_path}/p-file.txt", mode='w') as f:
+    with open(f"{opts.base_path}/p-file{epoch}.txt", mode='w') as f:
         f.write(result_text)
     progress_logger.info('Test loss:{loss.avg:.4f} '
                          'Acc:{Acc.avg:4f}'.format(loss=data_manager.loss_manager.loss,
@@ -434,13 +434,14 @@ for epoch in range(opts.start_epoch, opts.end_epoch + 1):
             opts.checkpoint)
     else:
         valtrack += 1
+    test(testloader, model, epoch)
     if opts.patience <= valtrack:
         break
     progress_logger.info(
         f'Validation: {valid_loss} (best:{"{0:,.5f}".format(best_val)}) (valtrack:{"{0:,.5f}".format(valtrack)})')
 
 my_util.load_checkpoint(best_epoch, best_val, model, opts)
-test(testloader, model)
+test(testloader, model, "1000-best")
 
 writer.close()  # close tensorboard writer
 progress_logger.info("Finish!!")
