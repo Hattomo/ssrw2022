@@ -32,7 +32,7 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     # model
     parser.add_argument('--lstm-layer', default=2, type=int, help="LSTM layer")
     parser.add_argument('--lstm-hidden', default=100, type=int, help="LSTM hidden size")
-    parser.add_argument('--batch_size', default=16, type=int, help="batch size")
+    parser.add_argument('--batch_size', default=2, type=int, help="batch size")
     # training
     parser.add_argument('--train-size', default=(2996, 7496), type=tuple, help="train-size")  # 2996(0, 7496)
     parser.add_argument('--valid-size', default=(7496, 7596), type=tuple, help="valid-size")  # (7496, 7596)
@@ -43,7 +43,7 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser.add_argument('--resume', default='', type=str, help="resume checkpoint path")
     parser.add_argument('--token', default=f"build/{time}/token.json", type=str, help="token path")
     # Optimizer
-    parser.add_argument('--lr', default=1e-4, type=float, help="学習率")  # d: 0.0001
+    parser.add_argument('--lr', default=1e-5, type=float, help="学習率")  # d: 0.0001
     parser.add_argument('--momentum', default=0.9, type=float, help="モメンタム")
     parser.add_argument('--weight_decay', default=0, type=float, help="weight decay")
     parser.add_argument('--clip', default=5.0, type=float, help="")
