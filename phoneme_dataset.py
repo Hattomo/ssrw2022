@@ -64,6 +64,8 @@ class MaskedPhonemeDataset(Dataset):
         for label in self.labels:
             tokens = []
             for e in label:
+                if e == "":
+                    break
                 tokens.append(self.dict[e])
             self.tokens_list.append(tokens)
 

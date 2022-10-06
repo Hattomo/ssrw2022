@@ -12,3 +12,7 @@ SSRW_env
 
 *.png
 *.csv
+
+checkpoints_aoyama
+
+.ipynb_checkpoints/*

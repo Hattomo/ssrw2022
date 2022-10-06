@@ -65,3 +65,29 @@ class Decoder(nn.Module):
         x, state = self.lstm(x, state)
         x = self.linear(x)
         return x, state
+
+class PhonemeLangModelv2(nn.Module):
+    def __init__(self,
+                 embed_size: int=32,
+                 hidden_dim_encoder: int=128,
+                 hidden_dim_decoder: int=128,
+                 vocab_size: int=46,
+                 max_len: int=500,
+                 img_size: int=64,
+                 device=torch.device('cuda:0')):
+        super(PhonemeLangModelv2, self).__init__()
+        self.embed_size = embed_size
+        self.hidden_dim_encoder = hidden_dim_encoder
+        self.hidden_dim_decoder = hidden_dim_decoder
+        self.max_len = max_len
+        self.img_size = img_size 
+        self.vocab_size = vocab_size
+        self.device = device
+        self.lstm_encoder = Encoder(self.embed_size, self.hidden_dim_encoder)
+        self.lstm_decoder = Decoder(self.vocab_size, self.embed_size, self.hidden_dim_decoder)
+
+    def forward(self, x, h):
+        h = self.lstm_encoder(x, h)
+        x = x[:, :-1]
+        x, h = self.lstm_decoder(x, h)
+        return x, h
