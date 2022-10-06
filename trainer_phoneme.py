@@ -141,7 +141,7 @@ class Trainer:
 
 class MaskedTrainer:
     """
-    This class train the model with train().s
+    This class train the model with train().
     """
     def __init__(self,
                  model: nn.Module,
