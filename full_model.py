@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pad_sequence
 
 from phoneme_dataset import PAD_NUM
 
@@ -46,6 +47,19 @@ class SSRWFullModel(nn.Module):
             tuple: 返すのはx: torch.Tensorとh: (torch.Tensor, torch.Tensor)のtuple
         """
         x = self.lip_reading_model(x, dlib)
+        x_sentences = []
         x = torch.argmax(x, dim=2)
+        for _x in x:
+            x_sentences.append(torch.Tensor(format_outputs(_x)))
+        x = pad_sequence(x_sentences, padding_value=PAD_NUM, batch_first=True)
         x, h = self.language_model(x, h)
         return x, h
+
+# format outputs
+def format_outputs(verbose):
+    predict = [verbose[0]]
+    for i in range(1, len(verbose)):
+        if verbose[i] != predict[-1]:
+            predict.append(verbose[i])
+    predict = [l for l in predict if l != PAD_NUM]
+    return predict

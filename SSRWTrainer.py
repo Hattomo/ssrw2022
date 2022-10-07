@@ -15,6 +15,7 @@ from phoneme_dataset import PhonemeDataset, collate_fn, dataset_spliter
 from my_utils.my_util import calculate_error
 from my_utils import my_util
 from phoneme_dataset import PAD_NUM, MASK_NUM
+from torch.nn.utils.rnn import pad_sequence
 
 class SSRWTrainer:
     """
@@ -28,7 +29,6 @@ class SSRWTrainer:
                  optimizer: torch.optim.Optimizer,
                  device: torch.device=torch.device('cuda:0'),):
         """Constractor
-
         Args:
             model (nn.Module): model for train.
             dataloader_train (DataLoader): train dataloader
@@ -75,6 +75,8 @@ class SSRWTrainer:
                 self.optimizer.zero_grad()
                 states = self.detach(states)
                 outputs, states = self.model(data, states)
+                fusion_tensor = pad_sequence(outputs, label, padding_value=PAD_NUM, batch_first=True)
+                outputs, label = fusion_tensor[0:batch_size], fusion_tensor[batch_size+1:]
                 label = label.to(torch.long)
                 outputs = outputs.reshape(outputs.shape[0]*outputs.shape[1], outputs.shape[2])
                 label = label.reshape(label.shape[0]*label.shape[1])
@@ -85,3 +87,33 @@ class SSRWTrainer:
                 # print(f'loss: {loss}    acc: {acc}')
                 loss.backward()
                 self.optimizer.step()
+            
+            # 検証
+            for i, batch in tqdm(enumerate(self.dataloader_valid), total=len(self.dataloader_valid)):
+                # print(f'train: {i}/{len(self.dataloader_train)}')
+                data, label = batch
+                data = data.to(self.device)
+                label = label.to(self.device)
+                self.optimizer.zero_grad()
+                states = self.detach(states)
+                outputs, states = self.model(data, states)
+                fusion_tensor = pad_sequence(outputs, label, padding_value=PAD_NUM, batch_first=True)
+                outputs, label = fusion_tensor[0:batch_size], fusion_tensor[batch_size+1:]
+                label = label.to(torch.long)
+                outputs = outputs.reshape(outputs.shape[0]*outputs.shape[1], outputs.shape[2])
+                label = label.reshape(label.shape[0]*label.shape[1])
+                loss = self.criterion(outputs, label)
+                valid_loss += loss.item()
+                acc = accuracy_score(label.tolist(), outputs.argmax(dim=1).tolist())
+                valid_acc += acc
+        
+            epoch_loss_train = train_loss / len(self.dataloader_train)
+            epoch_acc_train = train_acc / len(self.dataloader_train)
+            epoch_loss_valid = valid_loss / len(self.dataloader_valid)
+            epoch_acc_valid = valid_acc / len(self.dataloader_valid)
+            self.train_loss_list.append(epoch_loss_train)
+            self.train_acc_list.append(epoch_acc_train)
+            self.valid_loss_list.append(epoch_loss_valid)
+            self.valid_acc_list.append(epoch_acc_valid)
+            print(f'train: Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss_train:.4f} Acc: {epoch_acc_train:.4f}')
+            print(f'valid: Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss_valid:.4f} Acc: {epoch_acc_valid:.4f}')
