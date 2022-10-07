@@ -9,9 +9,9 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='Set parameter')
     current_file_path = os.path.dirname(os.path.abspath(__file__))
     parser.add_argument('--dir', default=current_file_path, type=str, help='directory')
-    parser.add_argument('--debug', default=True, type=bool, help="debug mode")
+    parser.add_argument('--debug', default=False, type=bool, help="debug mode")
     parser.add_argument('--message', default='', type=str, help="message")
-    parser.add_argument('--mode', default='FV', type=str, help="mode")
+    parser.add_argument('--mode', default='', type=str, help="mode")
     parser.add_argument('--logger-path', default=f"build/{time}/", type=str, help="logger build path")
     # general
     parser.add_argument('--workers', default=int(0), type=int, help="使用するCPUコア数")
@@ -19,16 +19,14 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser.add_argument('--benchmark', default=False, type=bool, help="torch benchmark")
     parser.add_argument('--amp', default=False, type=bool, help="amp")
     # Dataset path
-    parser.add_argument('--label',
-                        default="data/train/label/*",
-                        type=str,
-                        help="label")
-    parser.add_argument('--image-path',
-                        default='data/train/tensor/*',
-                        type=str,
-                        help="train image path")
+    parser.add_argument(
+        '--label',
+        default="data/ROHAN4600/train/ROHAN4600_zundamon_voice_label/*",
+        type=str,
+        help="label")
+    parser.add_argument('--image-path', default='data/ROHAN4600/train/tensor/*', type=str, help="train image path")
     parser.add_argument('--csv-path',
-                        default='data/train/csv/*',
+                        default='data/ROHAN4600/train/csv/*',
                         type=str,
                         help="train csv path")
 
@@ -41,18 +39,18 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     # model
     parser.add_argument('--lstm-layer', default=2, type=int, help="LSTM layer")
     parser.add_argument('--lstm-hidden', default=100, type=int, help="LSTM hidden size")
-    parser.add_argument('--batch_size', default=8, type=int, help="batch size")
+    parser.add_argument('--batch_size', default=2, type=int, help="batch size")
     # training
-    parser.add_argument('--train-size', default=(0, 7486), type=tuple, help="train-size")
-    parser.add_argument('--valid-size', default=(7486, 7586), type=tuple, help="valid-size")
-    parser.add_argument('--test-size', default=(7586, 7596), type=tuple, help="test-size")
+    parser.add_argument('--train-size', default=(0, 4500), type=tuple, help="train-size")  # 2996(0, 7496)
+    parser.add_argument('--valid-size', default=(4500, 4600), type=tuple, help="valid-size")  # (7496, 7596)
+    parser.add_argument('--test-size', default=(4600, 4620), type=tuple, help="test-size")  # (7596, 7616)
     parser.add_argument('--patience', default=25, type=int, help="patience")
-    parser.add_argument('--end_epoch', default=40000, type=int, help="epoch")  # d: 720
+    parser.add_argument('--end_epoch', default=1000, type=int, help="epoch")  # d: 720
     parser.add_argument('--start_epoch', default=0, type=int, help="start epoch")
     parser.add_argument('--resume', default='', type=str, help="resume checkpoint path")
     parser.add_argument('--token', default=f"build/{time}/token.json", type=str, help="token path")
     # Optimizer
-    parser.add_argument('--lr', default=1e-4, type=float, help="学習率")  # d: 0.0001
+    parser.add_argument('--lr', default=1e-5, type=float, help="学習率")  # d: 0.0001
     parser.add_argument('--momentum', default=0.9, type=float, help="モメンタム")
     parser.add_argument('--weight_decay', default=0, type=float, help="weight decay")
     parser.add_argument('--clip', default=5.0, type=float, help="")
@@ -77,9 +75,9 @@ def set_debug_mode(opts: argparse.Namespace, log_conf: dict) -> None:
     opts.token = f"build/debug/token.json"
     os.makedirs(opts.tensorboard, exist_ok=True)
     os.makedirs(opts.checkpoint, exist_ok=True)
-    opts.train_size = (0, 200)
-    opts.valid_size = (200, 400)
-    opts.test_size = (400, 500)
+    opts.train_size = (0, 20)
+    opts.valid_size = (20, 40)
+    opts.test_size = (40, 50)
     opts.batch_size = 2
     opts.no_check = True
     opts.end_epoch = 2000

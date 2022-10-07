@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from lib2to3.pytree import Base
 import os
 import platform
 import json
@@ -23,7 +22,7 @@ from torchinfo import summary
 from my_args import get_parser, set_debug_mode, set_release_mode
 from my_utils import my_util
 from my_dataset_av import MyCollator, ROHANDataset
-from model import CNN3LSTMCTC, CNN2LSTMCTC, CNNConformer
+from model import CNN3LSTMCTC, CNN2LSTMCTC, CNNConformer, CNNConformer2
 import makelabel
 import data_transform
 from torchinfo import summary
@@ -113,7 +112,8 @@ progress_logger.info("Initilaize complete🎉")
 
 progress_logger.info("Start defining data loader...")
 
-phones = makelabel.get_phones_csv(opts.label)
+# phones = makelabel.get_phones_csv(opts.label, opts.train_size[0], opts.test_size[1])
+phones = makelabel.load_phones_csv()
 
 dict = {phones[i]: i for i in range(len(phones))}
 with open(opts.token, 'w') as vocab_file:
@@ -135,7 +135,7 @@ validset = ROHANDataset(labels=label[opts.valid_size[0]:opts.valid_size[1]],
                         data_size=opts.valid_size,
                         opts=opts,
                         transform=transform.base_img_transform)
-testset = ROHANDataset(labels=label[opts.test_size[0]:opts.test_size[1]],
+testset = ROHANDataset(labels=label[0:20],
                        image_path=opts.image_path,
                        csv_path=opts.csv_path,
                        data_size=opts.test_size,
@@ -168,7 +168,7 @@ progress_logger.info("Defining model...")
 
 # Set model
 output_size = len(phones)
-model = CNNConformer(opts.lstm_hidden, output_size, opts).to(DEVICE)
+model = CNNConformer2(opts.lstm_hidden, output_size, opts).to(DEVICE)
 progress_logger.info(f"Model : {model}")
 # TODO: Use torch summary (info?)
 # progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
@@ -247,10 +247,9 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
         input_lengths = input_lengths.to(DEVICE)
         target_lengths = target_lengths.to(DEVICE)
         targets = targets.to(DEVICE, non_blocking=True)
-        if opts.mode == "FV":
-            inputs = inputs.to(DEVICE, non_blocking=True).float()
-            dlib = dlib.to(DEVICE, non_blocking=True).float()
-            outputs = model(inputs, dlib, input_lengths,True)
+        inputs = inputs.to(DEVICE, non_blocking=True).float()
+        dlib = dlib.to(DEVICE, non_blocking=True).float()
+        outputs = model(inputs, dlib, input_lengths,True)
         batch_size = inputs.size(0)
         outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
         ctc_loss = criterion(outputs_, targets, input_lengths, target_lengths)
@@ -270,12 +269,9 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
                 pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
         result_logger.info(result_text)
         ctc_loss.backward()  # calculate gradients
-        # scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), opts.clip)  # clip gradients
         optimizer.step()
         optimizer.zero_grad()  # initlaize grad
-        # scaler.step(optimizer)
-        # scaler.update()
         pbar.update(1)
     data_manager.write(epoch)
     with open("build/result.txt", mode='w') as f:
@@ -315,10 +311,9 @@ def valid(loader, model, criterion, epoch):
             input_lengths = input_lengths.to(DEVICE, non_blocking=True)
             target_lengths = target_lengths.to(DEVICE, non_blocking=True)
             labels = labels.to(DEVICE, non_blocking=True)
-            if opts.mode == "FV":
-                inputs = inputs.to(DEVICE, non_blocking=True).float()
-                dlib = dlib.to(DEVICE, non_blocking=True).float()
-                outputs = model(inputs, dlib, input_lengths, False)
+            inputs = inputs.to(DEVICE, non_blocking=True).float()
+            dlib = dlib.to(DEVICE, non_blocking=True).float()
+            outputs = model(inputs, dlib, input_lengths, False)
             # 結果保存用
             batch_size = inputs.size(0)
             outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
@@ -350,7 +345,7 @@ def valid(loader, model, criterion, epoch):
                                                    Acc=data_manager.acc_manager.total_error))
     return data_manager.loss_manager.loss.avg
 
-def test(loader, model):
+def test(loader, model, epoch):
     """
 
     test function for 1 epoch
@@ -369,6 +364,7 @@ def test(loader, model):
     model.eval()
     data_num = len(loader.dataset)  # テストデータの総数
     pbar = tqdm(total=int(data_num / opts.batch_size))
+    result_text = ""
     with torch.no_grad():
         for i, (inputs, labels, input_lengths, target_lengths, dlib) in enumerate(loader):
             # データをdeviceに載せる
@@ -376,14 +372,12 @@ def test(loader, model):
             input_lengths = input_lengths.to(DEVICE, non_blocking=True)
             target_lengths = target_lengths.to(DEVICE, non_blocking=True)
             labels = labels.to(DEVICE, non_blocking=True)
-            if opts.mode == "FV":
-                inputs = inputs.to(DEVICE, non_blocking=True).float()
-                dlib = dlib.to(DEVICE, non_blocking=True).float()
-                outputs = model(inputs, dlib, input_lengths, False)
+            inputs = inputs.to(DEVICE, non_blocking=True).float()
+            dlib = dlib.to(DEVICE, non_blocking=True).float()
+            outputs = model(inputs, dlib, input_lengths, False)
             # 結果保存用
             batch_size = inputs.size(0)
             # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
-            result_text = ""
 
             for i in range(batch_size):
                 output = outputs[i]
@@ -395,8 +389,7 @@ def test(loader, model):
                 label = [phones[l] for l in label if phones[l] not in "_"]
                 ter = my_util.calculate_error(pred, label)
                 data_manager.update_acc(ter, batch_size)
-                result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
-                    pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n" + "WER : " + "\n\n"
+                result_text += " ".join(pred) + "\n"
             result_logger.info(result_text)
             outputs = outputs.permute(1, 0, 2).log_softmax(2)
             ctc_loss = criterion(outputs, labels, input_lengths, target_lengths)
@@ -405,7 +398,7 @@ def test(loader, model):
             pbar.update(1)
     pbar.close()
     data_manager.write(epoch)
-    with open("build/result.txt", mode='w') as f:
+    with open(f"{opts.base_path}/p-file{epoch}.txt", mode='w') as f:
         f.write(result_text)
     progress_logger.info('Test loss:{loss.avg:.4f} '
                          'Acc:{Acc.avg:4f}'.format(loss=data_manager.loss_manager.loss,
@@ -442,13 +435,14 @@ for epoch in range(opts.start_epoch, opts.end_epoch + 1):
             opts.checkpoint)
     else:
         valtrack += 1
+    test(testloader, model, epoch)
     if opts.patience <= valtrack:
         break
     progress_logger.info(
         f'Validation: {valid_loss} (best:{"{0:,.5f}".format(best_val)}) (valtrack:{"{0:,.5f}".format(valtrack)})')
 
 my_util.load_checkpoint(best_epoch, best_val, model, opts)
-test(testloader, model)
+test(testloader, model, 1000)
 
 writer.close()  # close tensorboard writer
 progress_logger.info("Finish!!")
