@@ -9,7 +9,7 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='Set parameter')
     current_file_path = os.path.dirname(os.path.abspath(__file__))
     parser.add_argument('--dir', default=current_file_path, type=str, help='directory')
-    parser.add_argument('--debug', default=False, type=bool, help="debug mode")
+    parser.add_argument('--debug', default=True, type=bool, help="debug mode")
     parser.add_argument('--message', default='', type=str, help="message")
     parser.add_argument('--mode', default='', type=str, help="mode")
     parser.add_argument('--logger-path', default=f"build/{time}/", type=str, help="logger build path")

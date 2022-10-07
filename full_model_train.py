@@ -197,10 +197,10 @@ for param in ctc_model.efficient_net._blocks[-2].parameters():
 criterion = nn.CrossEntropyLoss()
 
 # 保存したものがあれば呼び出す
-ctc_model.load_state_dict('./checkpoints_aoyama/epoch029_val1.192.pth')
-language_model = PhonemeLangModel(device=DEVICE)
-language_model.load_state_dict('./checkpoints_aoyama/lstm_lang_model_ROHAN.pth')
-model = SSRWFullModel(ctc_model, language_model, phoneme_dict=phone_dict, device=DEVICE)
+ctc_model.load_state_dict(torch.load('./checkpoints_aoyama/epoch029_val1.192.pth', map_location="cuda:0")['model_state_dict'])
+language_model = PhonemeLangModel(device=DEVICE).to(DEVICE)
+language_model.load_state_dict(torch.load('./checkpoints_aoyama/lstm_lang_model_ROHAN.pth'))
+model = SSRWFullModel(ctc_model, language_model, phoneme_dict=phone_dict, device=DEVICE).to(DEVICE)
 
 # optimizer定義 adamかsgd?
 optimizer = torch.optim.Adam(model.parameters(), lr=opts.lr, eps=1e-03, weight_decay=0)  #lr(学習率)はいじった方がいい0.001
@@ -240,9 +240,9 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
     data_num = len(loader.dataset)  # テストデータの総数
     pbar = tqdm(total=int(data_num / opts.batch_size))
     hidden_dim = model.language_model.hidden_dim_encoder
-    device = model.laguage_model.device
-    states = (torch.zeros(1, batch_size, hidden_dim).to(device),
-              torch.zeros(1, batch_size, hidden_dim).to(device))
+    batch_size = opts.batch_size
+    states = (torch.zeros(1, batch_size, hidden_dim).to(DEVICE),
+              torch.zeros(1, batch_size, hidden_dim).to(DEVICE))
     model.train()
     for batch, (inputs, targets, input_lengths, target_lengths, dlib) in enumerate(loader):
         # データをdeviceに載せる
@@ -253,7 +253,7 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
         inputs = inputs.to(DEVICE, non_blocking=True).float()
         dlib = dlib.to(DEVICE, non_blocking=True).float()
         # 統合モデルへの入力
-        outputs = model(inputs, dlib, input_lengths, False, states)
+        outputs, states = model(inputs, dlib, input_lengths, False, states)
         batch_size = inputs.size(0)
         # 出力とラベルのpadding
         if targets.shape[1] < outputs.shape[1]:
@@ -315,6 +315,7 @@ def valid(loader, model, criterion, epoch):
     model.eval()
     data_num = len(loader.dataset)  # テストデータの総数
     pbar = tqdm(total=int(data_num / opts.batch_size))
+    batch_size = opts.batch_size
     hidden_dim = model.language_model.hidden_dim_encoder
     device = model.laguage_model.device
     states = (torch.zeros(1, batch_size, hidden_dim).to(device),
@@ -391,6 +392,7 @@ def test(loader, model, epoch):
     data_num = len(loader.dataset)  # テストデータの総数
     pbar = tqdm(total=int(data_num / opts.batch_size))
     result_text = ""
+    batch_size = opts.batch_size
     hidden_dim = model.language_model.hidden_dim_encoder
     device = model.laguage_model.device
     states = (torch.zeros(1, batch_size, hidden_dim).to(device),

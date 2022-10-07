@@ -144,6 +144,7 @@ class CNNConformer(nn.Module):
 
     def __init__(self, hidden_size, output_size, opts) -> None:
         super(CNNConformer, self).__init__()
+        self.lstm = LSTM(10 + 256, 100, 46, opts)
         self.liner = nn.Linear(136, 12)
         self.dropout = nn.Dropout(p=0.2, inplace=False)
         self.conformer_linear = nn.Linear(1280, 268)
