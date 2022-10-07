@@ -22,7 +22,7 @@ from torchinfo import summary
 from my_args import get_parser, set_debug_mode, set_release_mode
 from my_utils import my_util
 from my_dataset_av import MyCollator, ROHANDataset
-from model import CNN3LSTMCTC, CNN2LSTMCTC, CNNConformer
+from model import CNN3LSTMCTC, CNN2LSTMCTC, CNNConformer, CNNConformer2
 import makelabel
 import data_transform
 from torchinfo import summary
@@ -135,7 +135,7 @@ validset = ROHANDataset(labels=label[opts.valid_size[0]:opts.valid_size[1]],
                         data_size=opts.valid_size,
                         opts=opts,
                         transform=transform.base_img_transform)
-testset = ROHANDataset(labels=label[opts.test_size[0]:opts.test_size[1]],
+testset = ROHANDataset(labels=label[0:20],
                        image_path=opts.image_path,
                        csv_path=opts.csv_path,
                        data_size=opts.test_size,
@@ -168,7 +168,7 @@ progress_logger.info("Defining model...")
 
 # Set model
 output_size = len(phones)
-model = CNNConformer(opts.lstm_hidden, output_size, opts).to(DEVICE)
+model = CNNConformer2(opts.lstm_hidden, output_size, opts).to(DEVICE)
 progress_logger.info(f"Model : {model}")
 # TODO: Use torch summary (info?)
 # progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
