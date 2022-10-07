@@ -32,7 +32,12 @@ class SSRWFullModel(nn.Module):
         self.dict = phoneme_dict
         self.device = device
     
-    def forward(self, x: torch.Tensor, dlib: torch.Tensor, h: tuple) -> tuple:
+    def forward(self,
+                x: torch.Tensor,
+                dlib: torch.Tensor,
+                input_legth: torch.Tensor,
+                data_aug: bool,
+                h: tuple) -> tuple:
         """
         nn.Moduleからの必須オーバライド
         xは画像、dlibはdlib特徴量, hは言語モデルでlstmを使う場合のhです。
@@ -46,7 +51,7 @@ class SSRWFullModel(nn.Module):
         Returns:
             tuple: 返すのはx: torch.Tensorとh: (torch.Tensor, torch.Tensor)のtuple
         """
-        x = self.lip_reading_model(x, dlib)
+        x = self.lip_reading_model(x, dlib, input_legth, data_aug)
         x_sentences = []
         x = torch.argmax(x, dim=2)
         for _x in x:

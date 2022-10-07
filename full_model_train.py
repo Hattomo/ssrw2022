@@ -17,6 +17,7 @@ import torch.cuda.amp as amp
 from torch.utils.tensorboard import SummaryWriter  # tensorboard
 from tqdm import tqdm
 from torchinfo import summary
+from full_model import SSRWFullModel
 
 # 自作プログラムの読込
 from my_args import get_parser, set_debug_mode, set_release_mode
@@ -74,6 +75,7 @@ python     : {platform.python_version()},\n\
 Pytorch    : {torch.__version__}"                                 )
 # yapf: enable
 
+DEVICE = torch.device('cuda')
 
 # save args
 with open(f"{opts.base_path}/args.json", 'wt') as f:
@@ -107,11 +109,6 @@ if not opts.no_check:
 os.makedirs(opts.checkpoint, exist_ok=True)
 progress_logger.info(f"Set checkpoint path : {opts.checkpoint}")
 
-# Set Device
-if opts.device == '':
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-else:
-    DEVICE = torch.device(opts.device)
 opts.device = DEVICE
 
 progress_logger.info(f"DEVICE : {DEVICE}")
@@ -178,43 +175,32 @@ progress_logger.info("Defining model...")
 
 # Set model
 output_size = len(phones)
-model = CNNConformer(opts.lstm_hidden, output_size, opts).to(DEVICE)
-progress_logger.info(f"Model : {model}")
+ctc_model = CNNConformer(opts.lstm_hidden, output_size, opts).to(DEVICE)
+progress_logger.info(f"Model : {ctc_model}")
 # TODO: Use torch summary (info?)
 # progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
 
-for param in model.efficient_net.parameters():
+for param in ctc_model.efficient_net.parameters():
     param.requires_grad = False
-for param in model.efficient_net._fc.parameters():
+for param in ctc_model.efficient_net._fc.parameters():
     param.requires_grad = True
-for param in model.efficient_net._bn1.parameters():
+for param in ctc_model.efficient_net._bn1.parameters():
     param.requires_grad = True
-for param in model.efficient_net._conv_head.parameters():
+for param in ctc_model.efficient_net._conv_head.parameters():
     param.requires_grad = True
-for param in model.efficient_net._blocks[-1].parameters():
+for param in ctc_model.efficient_net._blocks[-1].parameters():
     param.requires_grad = True
-for param in model.efficient_net._blocks[-2].parameters():
+for param in ctc_model.efficient_net._blocks[-2].parameters():
     param.requires_grad = True
 
 #- Set Loss func
-criterion = nn.CTCLoss(blank=phones.index('_'), zero_infinity=True)
+criterion = nn.CrossEntropyLoss()
 
 # 保存したものがあれば呼び出す
-progress_logger.info("call out checkpoint if exists...")
-if opts.resume:
-    if os.path.isfile(opts.resume):
-        print("=> loading checkpoint '{}'".format(opts.resume))
-        checkpoint = torch.load(opts.resume)
-        START_EPOCH = checkpoint['epoch']
-        best_val = float('inf')
-        model.load_state_dict(checkpoint['model_state_dict'])
-        progress_logger.info("=> loaded checkpoint '{}' (epoch {})".format(opts.resume, checkpoint['epoch']))
-    else:
-        progress_logger.info("=> no checkpoint found at '{}'".format(opts.resume))
-        best_val = float('inf')
-else:
-    best_val = float('inf')
-    progress_logger.info("=> no checkpoint found")
+ctc_model.load_state_dict('./checkpoints_aoyama/epoch029_val1.192.pth')
+language_model = PhonemeLangModel(device=DEVICE)
+language_model.load_state_dict('./checkpoints_aoyama/lstm_lang_model_ROHAN.pth')
+model = SSRWFullModel(ctc_model, language_model, phoneme_dict=phone_dict, device=DEVICE)
 
 # optimizer定義 adamかsgd?
 optimizer = torch.optim.Adam(model.parameters(), lr=opts.lr, eps=1e-03, weight_decay=0)  #lr(学習率)はいじった方がいい0.001
@@ -253,6 +239,10 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
     data_manager = my_util.DataManager("train", writer)
     data_num = len(loader.dataset)  # テストデータの総数
     pbar = tqdm(total=int(data_num / opts.batch_size))
+    hidden_dim = model.language_model.hidden_dim_encoder
+    device = model.laguage_model.device
+    states = (torch.zeros(1, batch_size, hidden_dim).to(device),
+              torch.zeros(1, batch_size, hidden_dim).to(device))
     model.train()
     for batch, (inputs, targets, input_lengths, target_lengths, dlib) in enumerate(loader):
         # データをdeviceに載せる
@@ -262,11 +252,19 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
         targets = targets.to(DEVICE, non_blocking=True)
         inputs = inputs.to(DEVICE, non_blocking=True).float()
         dlib = dlib.to(DEVICE, non_blocking=True).float()
-        outputs = model(inputs, dlib, input_lengths,True)
+        # 統合モデルへの入力
+        outputs = model(inputs, dlib, input_lengths, False, states)
         batch_size = inputs.size(0)
-        outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
-        ctc_loss = criterion(outputs_, targets, input_lengths, target_lengths)
-        data_manager.update_loss(ctc_loss.data.item(), batch_size)
+        # 出力とラベルのpadding
+        if targets.shape[1] < outputs.shape[1]:
+            targets = pad_label(targets, outputs).to(DEVICE)
+        elif targets.shape[1] > outputs.shape[1]:
+            outputs = pad_out(targets, outputs).to(DEVICE)
+        # nn.CrossEntropyLossに入れれるようにreshape
+        outputs = outputs.reshape(outputs.shape[0]*outputs.shape[1], outputs.shape[2])
+        targets = targets.reshape(targets.shape[0]*targets.shape[1])
+        loss = criterion(output, targets)
+        data_manager.update_loss(loss.data.item(), batch_size)
         result_text = ""
         for i in range(batch_size):
             output = outputs[i]
@@ -281,7 +279,7 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
             result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
                 pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
         result_logger.info(result_text)
-        ctc_loss.backward()  # calculate gradients
+        loss.backward()  # calculate gradients
         torch.nn.utils.clip_grad_norm_(model.parameters(), opts.clip)  # clip gradients
         optimizer.step()
         optimizer.zero_grad()  # initlaize grad
@@ -317,6 +315,10 @@ def valid(loader, model, criterion, epoch):
     model.eval()
     data_num = len(loader.dataset)  # テストデータの総数
     pbar = tqdm(total=int(data_num / opts.batch_size))
+    hidden_dim = model.language_model.hidden_dim_encoder
+    device = model.laguage_model.device
+    states = (torch.zeros(1, batch_size, hidden_dim).to(device),
+              torch.zeros(1, batch_size, hidden_dim).to(device))
     with torch.no_grad():
         for i, (inputs, labels, input_lengths, target_lengths, dlib) in enumerate(loader):
             # データをdeviceに載せる
@@ -326,12 +328,23 @@ def valid(loader, model, criterion, epoch):
             labels = labels.to(DEVICE, non_blocking=True)
             inputs = inputs.to(DEVICE, non_blocking=True).float()
             dlib = dlib.to(DEVICE, non_blocking=True).float()
-            outputs = model(inputs, dlib, input_lengths, False)
+            outputs = model(inputs, dlib, input_lengths, False, states)
             # 結果保存用
             batch_size = inputs.size(0)
-            outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
+            # 統合モデルへの入力
+            outputs = model(inputs, dlib, input_lengths, False, states)
+            batch_size = inputs.size(0)
+            # 出力とラベルのpadding
+            if targets.shape[1] < outputs.shape[1]:
+                targets = pad_label(targets, outputs).to(DEVICE)
+            elif targets.shape[1] > outputs.shape[1]:
+                outputs = pad_out(targets, outputs).to(DEVICE)
+            # nn.CrossEntropyLossに入れれるようにreshape
+            outputs = outputs.reshape(outputs.shape[0]*outputs.shape[1], outputs.shape[2])
+            targets = targets.reshape(targets.shape[0]*targets.shape[1])
+            loss = criterion(output, targets)
+            data_manager.update_loss(loss.data.item(), batch_size)
             # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
-            ctc_loss = criterion(outputs_, labels, input_lengths, target_lengths)
             result_text = ""
             for i in range(batch_size):
                 output = outputs[i]
@@ -347,7 +360,7 @@ def valid(loader, model, criterion, epoch):
                     pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
             result_logger.info(result_text)
             # measure performance and record loss
-            data_manager.update_loss(ctc_loss.data.item(), batch_size)
+            data_manager.update_loss(loss.data.item(), batch_size)
             pbar.update(1)
     pbar.close()
     data_manager.write(epoch)
@@ -378,6 +391,10 @@ def test(loader, model, epoch):
     data_num = len(loader.dataset)  # テストデータの総数
     pbar = tqdm(total=int(data_num / opts.batch_size))
     result_text = ""
+    hidden_dim = model.language_model.hidden_dim_encoder
+    device = model.laguage_model.device
+    states = (torch.zeros(1, batch_size, hidden_dim).to(device),
+              torch.zeros(1, batch_size, hidden_dim).to(device))
     with torch.no_grad():
         for i, (inputs, labels, input_lengths, target_lengths, dlib) in enumerate(loader):
             # データをdeviceに載せる
@@ -391,7 +408,18 @@ def test(loader, model, epoch):
             # 結果保存用
             batch_size = inputs.size(0)
             # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
-
+            # 統合モデルへの入力
+            outputs = model(inputs, dlib, input_lengths, False, states)
+            batch_size = inputs.size(0)
+            # 出力とラベルのpadding
+            if targets.shape[1] < outputs.shape[1]:
+                targets = pad_label(targets, outputs).to(DEVICE)
+            elif targets.shape[1] > outputs.shape[1]:
+                outputs = pad_out(targets, outputs).to(DEVICE)
+            # nn.CrossEntropyLossに入れれるようにreshape
+            outputs = outputs.reshape(outputs.shape[0]*outputs.shape[1], outputs.shape[2])
+            targets = targets.reshape(targets.shape[0]*targets.shape[1])
+            loss = criterion(output, targets)
             for i in range(batch_size):
                 output = outputs[i]
                 label = labels[i]
@@ -463,19 +491,3 @@ progress_logger.info("Finish!!")
 グラフは以下で確認可能
 tensorboard --logdir="./save_tb"
 '''
-
-def pad_label(labels: torch.Tensor, outputs: torch.Tensor) -> torch.Tensor:
-    """
-    outputsの方が長い場合にlabelsをpaddingする関数
-    PAD_NUMで埋めてください。
-
-    Args:
-        labels (torch.Tensor): [BATCH_SIZE, Seq_length_A]のTensor
-        outputs (torch.Tensor): [BATCH_SIZE, Seq_length_B, Vocab_size]のTensor
-
-    Returns:
-        torch.Tensor: [BATCH_SIZE, Seq_length_B]
-                      paddingされた後のlabelのTensor
-    """
-    pass
-
