@@ -57,7 +57,6 @@ class SSRWFullModel(nn.Module):
         for _x in x:
             x_sentences.append(torch.Tensor(format_outputs(_x)))
         x = pad_sequence(x_sentences, padding_value=PAD_NUM, batch_first=True).to(dtype=torch.long, device=self.device)
-        print(x.device, h[0].device)
         x, h = self.language_model(x, h)
         return x, h
 

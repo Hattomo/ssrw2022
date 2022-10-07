@@ -2,7 +2,7 @@ import torch
 from phoneme_dataset import PAD_NUM, MASK_NUM
 from torch.nn import functional as F
 
-def pad_label(labels: torch.Tensor, outputs: torch.Tensor) -> torch.Tensor:
+def pad_label(labels: torch.Tensor, outputs: torch.Tensor, device) -> torch.Tensor:
     """
     outputsの方が長い場合にlabelsをpaddingする関数
     PAD_NUMで埋めてください。
@@ -19,7 +19,7 @@ def pad_label(labels: torch.Tensor, outputs: torch.Tensor) -> torch.Tensor:
     batch_size = labels.size(0)
     if labels.size(-1) < outputs.size(-2):
         padding_length = outputs.size(-2) - labels.size(-1)
-        pad = torch.full(size=(batch_size, padding_length), fill_value=PAD_NUM)
+        pad = torch.full(size=(batch_size, padding_length), fill_value=PAD_NUM).to(device)
         labels = torch.cat([labels, pad], dim=1)
     return labels
 

@@ -31,13 +31,14 @@ from language_model import PhonemeLangModel
 import json
 from pad_label_func import pad_label
 from pad_out_func import pad_out
+from phoneme_dataset import PAD_NUM
 
 dict_path = 'data/label.pkl'
 labels_path = 'data/phoneme.csv'
 dict_path = 'data/phoneme_dict.json'
 with open(dict_path, 'r') as f:
     phone_dict = json.load(f)
-
+phones = list(phone_dict.keys())
 torch.multiprocessing.set_start_method('spawn')
 
 start_time = datetime.now().strftime("%y%m%d-%H%M%S")
@@ -119,12 +120,6 @@ progress_logger.info("Initilaize complete🎉")
 
 progress_logger.info("Start defining data loader...")
 
-# phones = makelabel.get_phones_csv(opts.label, opts.train_size[0], opts.test_size[1])
-phones = makelabel.load_phones_csv()
-
-dict = {phones[i]: i for i in range(len(phones))}
-with open(opts.token, 'w') as vocab_file:
-    json.dump(dict, vocab_file, indent=4, ensure_ascii=False)
 
 label = makelabel.get_label_csv(opts.label, phones)
 transform = data_transform.DataTransform()
@@ -216,7 +211,7 @@ def format_outputs(verbose):
     for i in range(1, len(verbose)):
         if verbose[i] != predict[-1]:
             predict.append(verbose[i])
-    predict = [l for l in predict if l != phones.index('_')]
+    predict = [l for l in predict if l != PAD_NUM]
     return predict
 
 def train(loader, model, criterion, optimizer, scaler, epoch):
@@ -253,19 +248,24 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
         inputs = inputs.to(DEVICE, non_blocking=True).float()
         dlib = dlib.to(DEVICE, non_blocking=True).float()
         # 統合モデルへの入力
+        states = detach(states)
         outputs, states = model(inputs, dlib, input_lengths, False, states)
         batch_size = inputs.size(0)
         # 出力とラベルのpadding
         if targets.shape[1] < outputs.shape[1]:
-            targets = pad_label(targets, outputs).to(DEVICE)
+            targets = pad_label(targets, outputs, DEVICE).to(DEVICE)
         elif targets.shape[1] > outputs.shape[1]:
-            outputs = pad_out(targets, outputs).to(DEVICE)
+            outputs = pad_out(targets, outputs, DEVICE).to(DEVICE)
         # nn.CrossEntropyLossに入れれるようにreshape
+        before_shape_output = outputs.shape
+        before_shape_label = targets.shape
         outputs = outputs.reshape(outputs.shape[0]*outputs.shape[1], outputs.shape[2])
         targets = targets.reshape(targets.shape[0]*targets.shape[1])
-        loss = criterion(output, targets)
+        loss = criterion(outputs, targets)
         data_manager.update_loss(loss.data.item(), batch_size)
         result_text = ""
+        outputs = outputs.reshape(*before_shape_output)
+        targets = targets.reshape(*before_shape_label)
         for i in range(batch_size):
             output = outputs[i]
             label = targets[i]
@@ -317,39 +317,40 @@ def valid(loader, model, criterion, epoch):
     pbar = tqdm(total=int(data_num / opts.batch_size))
     batch_size = opts.batch_size
     hidden_dim = model.language_model.hidden_dim_encoder
-    device = model.laguage_model.device
-    states = (torch.zeros(1, batch_size, hidden_dim).to(device),
-              torch.zeros(1, batch_size, hidden_dim).to(device))
+    batch_size = opts.batch_size
+    states = (torch.zeros(1, batch_size, hidden_dim).to(DEVICE),
+              torch.zeros(1, batch_size, hidden_dim).to(DEVICE))
     with torch.no_grad():
-        for i, (inputs, labels, input_lengths, target_lengths, dlib) in enumerate(loader):
+        for i, (inputs, targets, input_lengths, target_lengths, dlib) in enumerate(loader):
             # データをdeviceに載せる
             # 初期値
             input_lengths = input_lengths.to(DEVICE, non_blocking=True)
             target_lengths = target_lengths.to(DEVICE, non_blocking=True)
-            labels = labels.to(DEVICE, non_blocking=True)
+            targets = targets.to(DEVICE, non_blocking=True)
             inputs = inputs.to(DEVICE, non_blocking=True).float()
             dlib = dlib.to(DEVICE, non_blocking=True).float()
-            outputs = model(inputs, dlib, input_lengths, False, states)
-            # 結果保存用
-            batch_size = inputs.size(0)
-            # 統合モデルへの入力
-            outputs = model(inputs, dlib, input_lengths, False, states)
+            states = detach(states)
+            outputs, states = model(inputs, dlib, input_lengths, False, states)
             batch_size = inputs.size(0)
             # 出力とラベルのpadding
             if targets.shape[1] < outputs.shape[1]:
-                targets = pad_label(targets, outputs).to(DEVICE)
+                targets = pad_label(targets, outputs, DEVICE).to(DEVICE)
             elif targets.shape[1] > outputs.shape[1]:
-                outputs = pad_out(targets, outputs).to(DEVICE)
+                outputs = pad_out(targets, outputs, DEVICE).to(DEVICE)
             # nn.CrossEntropyLossに入れれるようにreshape
+            before_shape_output = outputs.shape
+            before_shape_label = targets.shape
             outputs = outputs.reshape(outputs.shape[0]*outputs.shape[1], outputs.shape[2])
             targets = targets.reshape(targets.shape[0]*targets.shape[1])
-            loss = criterion(output, targets)
+            loss = criterion(outputs, targets)
             data_manager.update_loss(loss.data.item(), batch_size)
             # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
             result_text = ""
+            outputs = outputs.reshape(*before_shape_output)
+            targets = targets.reshape(*before_shape_label)
             for i in range(batch_size):
                 output = outputs[i]
-                label = labels[i]
+                label = targets[i]
                 _, output = output.max(dim=1)
                 pred = format_outputs(output)
                 output = [phones[l] for l in output]
@@ -394,37 +395,40 @@ def test(loader, model, epoch):
     result_text = ""
     batch_size = opts.batch_size
     hidden_dim = model.language_model.hidden_dim_encoder
-    device = model.laguage_model.device
-    states = (torch.zeros(1, batch_size, hidden_dim).to(device),
-              torch.zeros(1, batch_size, hidden_dim).to(device))
+    batch_size = opts.batch_size
+    states = (torch.zeros(1, batch_size, hidden_dim).to(DEVICE),
+              torch.zeros(1, batch_size, hidden_dim).to(DEVICE))
     with torch.no_grad():
-        for i, (inputs, labels, input_lengths, target_lengths, dlib) in enumerate(loader):
+        for i, (inputs, targets, input_lengths, target_lengths, dlib) in enumerate(loader):
             # データをdeviceに載せる
             # 初期値
             input_lengths = input_lengths.to(DEVICE, non_blocking=True)
             target_lengths = target_lengths.to(DEVICE, non_blocking=True)
-            labels = labels.to(DEVICE, non_blocking=True)
+            targets = targets.to(DEVICE, non_blocking=True)
             inputs = inputs.to(DEVICE, non_blocking=True).float()
             dlib = dlib.to(DEVICE, non_blocking=True).float()
-            outputs = model(inputs, dlib, input_lengths, False)
             # 結果保存用
             batch_size = inputs.size(0)
             # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
             # 統合モデルへの入力
-            outputs = model(inputs, dlib, input_lengths, False, states)
+            outputs, states = model(inputs, dlib, input_lengths, False, states)
             batch_size = inputs.size(0)
             # 出力とラベルのpadding
             if targets.shape[1] < outputs.shape[1]:
-                targets = pad_label(targets, outputs).to(DEVICE)
+                targets = pad_label(targets, outputs, DEVICE).to(DEVICE)
             elif targets.shape[1] > outputs.shape[1]:
-                outputs = pad_out(targets, outputs).to(DEVICE)
+                outputs = pad_out(targets, outputs, DEVICE).to(DEVICE)
             # nn.CrossEntropyLossに入れれるようにreshape
+            before_shape_output = outputs.shape
+            before_shape_label = targets.shape
             outputs = outputs.reshape(outputs.shape[0]*outputs.shape[1], outputs.shape[2])
             targets = targets.reshape(targets.shape[0]*targets.shape[1])
-            loss = criterion(output, targets)
+            loss = criterion(outputs, targets)
+            outputs = outputs.reshape(*before_shape_output)
+            targets = targets.reshape(*before_shape_label)
             for i in range(batch_size):
                 output = outputs[i]
-                label = labels[i]
+                label = targets[i]
                 _, output = output.max(dim=1)
                 pred = format_outputs(output)
                 output = [phones[l] for l in output]
@@ -435,9 +439,8 @@ def test(loader, model, epoch):
                 result_text += " ".join(pred) + "\n"
             result_logger.info(result_text)
             outputs = outputs.permute(1, 0, 2).log_softmax(2)
-            ctc_loss = criterion(outputs, labels, input_lengths, target_lengths)
             # measure performance and record loss
-            data_manager.update_loss(ctc_loss.data.item(), batch_size)
+            data_manager.update_loss(loss.data.item(), batch_size)
             pbar.update(1)
     pbar.close()
     data_manager.write(epoch)
@@ -455,6 +458,7 @@ valtrack = 0
 # Start Train
 progress_logger.info(f"LOG : Train Started ...epoch {opts.end_epoch}まで")
 scaler = amp.GradScaler(enabled=opts.amp)
+best_val = float('inf')
 for epoch in range(opts.start_epoch, opts.end_epoch + 1):
     train(trainloader, model, criterion, optimizer, scaler, epoch)
     valid_loss = valid(validloader, model, criterion, epoch)

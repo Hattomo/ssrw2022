@@ -9,7 +9,7 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='Set parameter')
     current_file_path = os.path.dirname(os.path.abspath(__file__))
     parser.add_argument('--dir', default=current_file_path, type=str, help='directory')
-    parser.add_argument('--debug', default=True, type=bool, help="debug mode")
+    parser.add_argument('--debug', default=False, type=bool, help="debug mode")
     parser.add_argument('--message', default='', type=str, help="message")
     parser.add_argument('--mode', default='', type=str, help="mode")
     parser.add_argument('--logger-path', default=f"build/{time}/", type=str, help="logger build path")
@@ -50,7 +50,7 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser.add_argument('--resume', default='', type=str, help="resume checkpoint path")
     parser.add_argument('--token', default=f"build/{time}/token.json", type=str, help="token path")
     # Optimizer
-    parser.add_argument('--lr', default=1e-5, type=float, help="学習率")  # d: 0.0001
+    parser.add_argument('--lr', default=1e-4, type=float, help="学習率")  # d: 0.0001
     parser.add_argument('--momentum', default=0.9, type=float, help="モメンタム")
     parser.add_argument('--weight_decay', default=0, type=float, help="weight decay")
     parser.add_argument('--clip', default=5.0, type=float, help="")
