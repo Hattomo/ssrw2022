@@ -187,10 +187,10 @@ class CNNConformer(nn.Module):
         x = self.decoder(x[0])
         return x
 
-class CNNConformer2(nn.Module):
+class CNNConformer(nn.Module):
 
     def __init__(self, hidden_size, output_size, opts) -> None:
-        super(CNNConformer2, self).__init__()
+        super(CNNConformer, self).__init__()
         self.dropout = nn.Dropout(p=0.2, inplace=False)
         # self.conformer_linear = nn.Linear(1280, 268)
         self.efficient_net = EfficientNet.from_pretrained('efficientnet-b0', in_channels=1)
