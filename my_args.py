@@ -24,7 +24,11 @@ def get_parser(time: str) -> argparse.ArgumentParser:
         default="data/ROHAN4600/train/ROHAN4600_zundamon_voice_label/*",
         type=str,
         help="label")
-    parser.add_argument('--image-path', default='data/ROHAN4600/train/tensor/*', type=str, help="train image path")
+    parser.add_argument('--image-path',
+                        default='data/ROHAN4600/train/tensor/*',
+                        type=str,
+                        help="train image path")
+    # 'data/ROHAN4600/train/video/*'
     parser.add_argument('--csv-path',
                         default='data/ROHAN4600/train/csv/*',
                         type=str,
@@ -39,7 +43,7 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     # model
     parser.add_argument('--lstm-layer', default=2, type=int, help="LSTM layer")
     parser.add_argument('--lstm-hidden', default=100, type=int, help="LSTM hidden size")
-    parser.add_argument('--batch_size', default=2, type=int, help="batch size")
+    parser.add_argument('--batch_size', default=16, type=int, help="batch size")
     # training
     parser.add_argument('--train-size', default=(0, 4500), type=tuple, help="train-size")  # 2996(0, 7496)
     parser.add_argument('--valid-size', default=(4500, 4600), type=tuple, help="valid-size")  # (7496, 7596)
@@ -50,14 +54,14 @@ def get_parser(time: str) -> argparse.ArgumentParser:
     parser.add_argument('--resume', default='', type=str, help="resume checkpoint path")
     parser.add_argument('--token', default=f"build/{time}/token.json", type=str, help="token path")
     # Optimizer
-    parser.add_argument('--lr', default=1e-5, type=float, help="学習率")  # d: 0.0001
+    parser.add_argument('--lr', default=1e-4, type=float, help="学習率")  # d: 0.0001
     parser.add_argument('--momentum', default=0.9, type=float, help="モメンタム")
     parser.add_argument('--weight_decay', default=0, type=float, help="weight decay")
     parser.add_argument('--clip', default=5.0, type=float, help="")
     # other
     parser.add_argument('--seed', default=2, type=int, help="randomのseed")
     parser.add_argument('--cpu', action='store_true', help="cpuで動作させたい場合")
-    parser.add_argument('--device', default="cuda:0", help="device")
+    parser.add_argument('--device', default="cuda:1", help="device")
 
     return parser
 
@@ -77,7 +81,7 @@ def set_debug_mode(opts: argparse.Namespace, log_conf: dict) -> None:
     os.makedirs(opts.checkpoint, exist_ok=True)
     opts.train_size = (0, 20)
     opts.valid_size = (20, 40)
-    opts.test_size = (40, 50)
+    opts.test_size = (40, 60)
     opts.batch_size = 2
     opts.no_check = True
     opts.end_epoch = 2000

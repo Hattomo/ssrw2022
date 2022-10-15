@@ -61,7 +61,7 @@ Processor  : {platform.processor()},\n\
 Platform   : {platform.platform()},\n\
 Machine    : {platform.machine()},\n\
 python     : {platform.python_version()},\n\
-Pytorch    : {torch.__version__}"                                 )
+Pytorch    : {torch.__version__}")
 # yapf: enable
 
 
@@ -168,7 +168,7 @@ progress_logger.info("Defining model...")
 
 # Set model
 output_size = len(phones)
-model = CNNConformer2(opts.lstm_hidden, output_size, opts).to(DEVICE)
+model = CNNConformer(opts.lstm_hidden, output_size, opts).to(DEVICE)
 progress_logger.info(f"Model : {model}")
 # TODO: Use torch summary (info?)
 # progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
@@ -187,7 +187,7 @@ for param in model.efficient_net._blocks[-2].parameters():
     param.requires_grad = True
 
 #- Set Loss func
-criterion = nn.CTCLoss(blank=phones.index('_'), zero_infinity=True)
+criterion = nn.CTCLoss(blank=phones.index('_'), zero_infinity=False)
 
 # 保存したものがあれば呼び出す
 progress_logger.info("call out checkpoint if exists...")
@@ -249,7 +249,7 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
         targets = targets.to(DEVICE, non_blocking=True)
         inputs = inputs.to(DEVICE, non_blocking=True).float()
         dlib = dlib.to(DEVICE, non_blocking=True).float()
-        outputs = model(inputs, dlib, input_lengths,True)
+        outputs = model(inputs, dlib, input_lengths, True)
         batch_size = inputs.size(0)
         outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
         ctc_loss = criterion(outputs_, targets, input_lengths, target_lengths)
