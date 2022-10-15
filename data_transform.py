@@ -15,15 +15,19 @@ class DataTransform:
         trans = torch.nn.Sequential(
             # transforms.RandomHorizontalFlip(p=0.5),
             # transforms.AugMix(),
+            # transforms.Resize((224, 224)),
+            # transforms.Grayscale(),
             transforms.ConvertImageDtype(torch.float),
             transforms.Normalize(mean=[0.5], std=[0.5]),
         ).to(torch.device(opts.device))
         return trans(x)
 
     def base_img_transform(self, x, opts):
-            x = x.to(opts.device)
-            trans = torch.nn.Sequential(
-                transforms.ConvertImageDtype(torch.float),
-                transforms.Normalize(mean=[0.5], std=[0.5]),
-            ).to(torch.device(opts.device))
-            return trans(x)
+        x = x.to(opts.device)
+        trans = torch.nn.Sequential(
+            # transforms.Resize((224, 224)),
+            # transforms.Grayscale(),
+            transforms.ConvertImageDtype(torch.float),
+            transforms.Normalize(mean=[0.5], std=[0.5]),
+        ).to(torch.device(opts.device))
+        return trans(x)
