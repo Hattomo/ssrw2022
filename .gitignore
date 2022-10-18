@@ -3,8 +3,10 @@ tmp/*
 
 __pycache__/
 data/
+checkpoints_aoyama/
 
 *.pt
+*.pth
 *.mp4
 
 SSRW_env

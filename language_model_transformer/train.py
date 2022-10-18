@@ -110,6 +110,7 @@ class Trainer:
                     src_mask = model.generate_square_subsequent_mask(data.size(1)).to(device)
                     outputs = self.model(data, src_mask)
                     label = label.reshape(label.size(0)*label.size(1))
+                    label = label.to(torch.long)
                     loss = self.criterion(outputs, label)
                     valid_loss += loss.item()
                     acc = accuracy_score(label.tolist(), outputs.argmax(dim=1).tolist())
@@ -137,7 +138,7 @@ if __name__ == "__main__":
     with open(dict_path, 'r') as f:
         phone_dict = json.load(f)
 
-    additional_file = '../phoneme_data.txt'
+    additional_file = '../data/phoneme_data.txt'
     with open(additional_file, 'r') as f:
         sentenses = f.readlines()
     datas = [s.replace('\n', '').split() for s in sentenses]
@@ -171,7 +172,7 @@ if __name__ == "__main__":
     dropout = 0.2 # the dropout value
     model = TransformerModel(ntokens, emsize, nhead, nhid, nlayers, dropout).to(device)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=3)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     # train

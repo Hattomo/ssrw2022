@@ -15,7 +15,7 @@ class PhonemeDataset(Dataset):
     def __init__(self,
                  phone_dict: dict,
                  datas: list,
-                 mask_ratio: float=0.3):
+                 mask_ratio: float=0.15):
         super(PhonemeDataset, self).__init__()
         """
         phone_dict には音素をキーとして一意のIDをバリューとする辞書を渡してください。
