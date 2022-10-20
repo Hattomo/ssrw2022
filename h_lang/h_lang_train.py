@@ -21,8 +21,8 @@ from torchinfo import summary
 # 自作プログラムの読込
 from my_args import get_parser, set_debug_mode, set_release_mode
 from my_utils import my_util
-from my_dataset_av import MyCollator, ROHANDataset
-from model import CNN3LSTMCTC, CNN2LSTMCTC, CNNConformer, CNNConformer2
+from my_dataset_phone import MyCollator, KDataset
+from my_model import PhonemeLangModelv2
 import makelabel
 import data_transform
 from torchinfo import summary
@@ -61,9 +61,8 @@ Processor  : {platform.processor()},\n\
 Platform   : {platform.platform()},\n\
 Machine    : {platform.machine()},\n\
 python     : {platform.python_version()},\n\
-Pytorch    : {torch.__version__}")
+Pytorch    : {torch.__version__}"                                                                                                                                                                                                      )
 # yapf: enable
-
 
 # save args
 with open(f"{opts.base_path}/args.json", 'wt') as f:
@@ -121,29 +120,12 @@ with open(opts.token, 'w') as vocab_file:
 
 label = makelabel.get_label_csv(opts.label, phones)
 transform = data_transform.DataTransform()
+
 # Load dataset
 progress_logger.info("Loading Dataset")
-trainset = ROHANDataset(labels=label[opts.train_size[0]:opts.train_size[1]],
-                        image_path=opts.image_path,
-                        csv_path=opts.csv_path,
-                        data_size=opts.train_size,
-                        opts=opts,
-                        mode=True,
-                        transform=transform.train_img_transform)
-validset = ROHANDataset(labels=label[opts.valid_size[0]:opts.valid_size[1]],
-                        image_path=opts.image_path,
-                        csv_path=opts.csv_path,
-                        data_size=opts.valid_size,
-                        opts=opts,
-                        mode=False,
-                        transform=transform.base_img_transform)
-testset = ROHANDataset(labels=label[0:20],
-                       image_path=opts.image_path,
-                       csv_path=opts.csv_path,
-                       data_size=opts.test_size,
-                       opts=opts,
-                       mode=False,
-                       transform=transform.base_img_transform)
+trainset = KDataset(labels=label[opts.train_size[0]:opts.train_size[1]], opts=opts, phones=phones)
+validset = KDataset(labels=label[opts.valid_size[0]:opts.valid_size[1]], opts=opts, phones=phones)
+testset = KDataset(labels=label[opts.test_size[0]:opts.test_size[1]], opts=opts, phones=phones)
 collate_fn = MyCollator(phones)
 
 trainloader = torch.utils.data.DataLoader(trainset,
@@ -171,26 +153,13 @@ progress_logger.info("Defining model...")
 
 # Set model
 output_size = len(phones)
-model = CNNConformer(opts.lstm_hidden, output_size, opts).to(DEVICE)
+model = PhonemeLangModelv2(phones=phones, opts=opts).to(DEVICE)
 progress_logger.info(f"Model : {model}")
 # TODO: Use torch summary (info?)
 # progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
 
-for param in model.efficient_net.parameters():
-    param.requires_grad = False
-for param in model.efficient_net._fc.parameters():
-    param.requires_grad = True
-for param in model.efficient_net._bn1.parameters():
-    param.requires_grad = True
-for param in model.efficient_net._conv_head.parameters():
-    param.requires_grad = True
-for param in model.efficient_net._blocks[-1].parameters():
-    param.requires_grad = True
-for param in model.efficient_net._blocks[-2].parameters():
-    param.requires_grad = True
-
 #- Set Loss func
-criterion = nn.CTCLoss(blank=phones.index('_'), zero_infinity=False)
+criterion = nn.CrossEntropyLoss(ignore_index=phones.index('_'), label_smoothing=0.1)
 
 # 保存したものがあれば呼び出す
 progress_logger.info("call out checkpoint if exists...")
@@ -209,18 +178,14 @@ else:
     best_val = float('inf')
     progress_logger.info("=> no checkpoint found")
 
-optimizer = torch.optim.RAdam(model.parameters(), lr=opts.lr)
+# optimizer定義 adamかsgd?
+optimizer = torch.optim.RAdam(model.parameters(), lr=opts.lr)  #lr(学習率)はいじった方がいい0.001
 
 progress_logger.info("Model defined")
 
 # format outputs
 def format_outputs(verbose):
-    predict = [verbose[0]]
-    for i in range(1, len(verbose)):
-        if verbose[i] != predict[-1]:
-            predict.append(verbose[i])
-    predict = [l for l in predict if l != phones.index('_')]
-    return predict
+    return [l for l in verbose if l != phones.index('_')]
 
 def train(loader, model, criterion, optimizer, scaler, epoch):
     """
@@ -243,41 +208,39 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
     data_num = len(loader.dataset)  # テストデータの総数
     pbar = tqdm(total=int(data_num / opts.batch_size))
     model.train()
-    for batch, (inputs, targets, input_lengths, target_lengths, dlib) in enumerate(loader):
+    for batch, (inputs, targets) in enumerate(loader):
         # データをdeviceに載せる
         # 初期値
-        input_lengths = input_lengths.to(DEVICE)
-        target_lengths = target_lengths.to(DEVICE)
         targets = targets.to(DEVICE, non_blocking=True)
-        inputs = inputs.to(DEVICE, non_blocking=True).float()
-        dlib = dlib.to(DEVICE, non_blocking=True).float()
-        outputs = model(inputs, dlib, input_lengths)
+        inputs = inputs.to(DEVICE, non_blocking=True)
+        decoder_output_length = targets.size(1)
+        outputs = model(inputs, decoder_output_length)
         batch_size = inputs.size(0)
-        outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
-        ctc_loss = criterion(outputs_, targets, input_lengths, target_lengths)
+        outputs_ = outputs.permute(0, 2, 1).softmax(2)
+        ctc_loss = criterion(outputs_, targets)
         data_manager.update_loss(ctc_loss.data.item(), batch_size)
-        result_text = ""
-        for i in range(batch_size):
-            output = outputs[i]
-            label = targets[i]
-            _, output = output.max(dim=1)
-            pred = format_outputs(output)
-            output = [phones[l] for l in output]
-            pred = [phones[l] for l in pred]
-            label = [phones[l] for l in label if phones[l] not in "_"]
-            ter = my_util.calculate_error(pred, label)
-            data_manager.update_acc(ter, batch_size)
-            result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
-                pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
-        result_logger.info(result_text)
+        # result_text = ""
+        # for i in range(batch_size):
+        #     output = outputs[i]
+        #     label = targets[i]
+        #     _, output = output.max(dim=1)
+        #     pred = format_outputs(output)
+        #     output = [phones[l] for l in output]
+        #     pred = [phones[l] for l in pred]
+        #     label = [phones[l] for l in label if phones[l] not in "_"]
+        #     ter = my_util.calculate_error(pred, label)
+        #     data_manager.update_acc(ter, batch_size)
+        #     result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
+        #         pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
+        # result_logger.info(result_text)
         ctc_loss.backward()  # calculate gradients
         torch.nn.utils.clip_grad_norm_(model.parameters(), opts.clip)  # clip gradients
         optimizer.step()
         optimizer.zero_grad()  # initlaize grad
         pbar.update(1)
     data_manager.write(epoch)
-    with open("build/result.txt", mode='w') as f:
-        f.write(result_text)
+    # with open("build/result.txt", mode='w') as f:
+        # f.write(result_text)
     pbar.close()
     progress_logger.info('Epoch: {0}\t'
                          'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(epoch, loss=data_manager.loss_manager.loss))
@@ -307,20 +270,17 @@ def valid(loader, model, criterion, epoch):
     data_num = len(loader.dataset)  # テストデータの総数
     pbar = tqdm(total=int(data_num / opts.batch_size))
     with torch.no_grad():
-        for i, (inputs, labels, input_lengths, target_lengths, dlib) in enumerate(loader):
+        for i, (inputs, labels) in enumerate(loader):
             # データをdeviceに載せる
             # 初期値
-            input_lengths = input_lengths.to(DEVICE, non_blocking=True)
-            target_lengths = target_lengths.to(DEVICE, non_blocking=True)
             labels = labels.to(DEVICE, non_blocking=True)
             inputs = inputs.to(DEVICE, non_blocking=True).float()
-            dlib = dlib.to(DEVICE, non_blocking=True).float()
-            outputs = model(inputs, dlib, input_lengths)
+            decoder_output_length = labels.size(1)
+            outputs = model(inputs, decoder_output_length)
             # 結果保存用
             batch_size = inputs.size(0)
-            outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
-            # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
-            ctc_loss = criterion(outputs_, labels, input_lengths, target_lengths)
+            outputs_ = outputs.permute(0, 2, 1).log_softmax(2)
+            ctc_loss = criterion(outputs_, labels)
             result_text = ""
             for i in range(batch_size):
                 output = outputs[i]
@@ -368,19 +328,15 @@ def test(loader, model, epoch):
     pbar = tqdm(total=int(data_num / opts.batch_size))
     result_text = ""
     with torch.no_grad():
-        for i, (inputs, labels, input_lengths, target_lengths, dlib) in enumerate(loader):
+        for i, (inputs, labels) in enumerate(loader):
             # データをdeviceに載せる
             # 初期値
-            input_lengths = input_lengths.to(DEVICE, non_blocking=True)
-            target_lengths = target_lengths.to(DEVICE, non_blocking=True)
             labels = labels.to(DEVICE, non_blocking=True)
             inputs = inputs.to(DEVICE, non_blocking=True).float()
-            dlib = dlib.to(DEVICE, non_blocking=True).float()
-            outputs = model(inputs, dlib, input_lengths)
+            decoder_output_length = labels.size(1)
+            outputs = model(inputs,decoder_output_length)
             # 結果保存用
             batch_size = inputs.size(0)
-            # input_lengths = torch.full((1, batch_size), fill_value=outputs.size(0))
-
             for i in range(batch_size):
                 output = outputs[i]
                 label = labels[i]
@@ -393,8 +349,8 @@ def test(loader, model, epoch):
                 data_manager.update_acc(ter, batch_size)
                 result_text += " ".join(pred) + "\n"
             result_logger.info(result_text)
-            outputs = outputs.permute(1, 0, 2).log_softmax(2)
-            ctc_loss = criterion(outputs, labels, input_lengths, target_lengths)
+            outputs = outputs.permute(0, 2, 1).log_softmax(2)
+            ctc_loss = criterion(outputs, labels)
             # measure performance and record loss
             data_manager.update_loss(ctc_loss.data.item(), batch_size)
             pbar.update(1)
