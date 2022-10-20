@@ -159,7 +159,7 @@ class CNNConformer(nn.Module):
         self.decoder = nn.Linear(280, output_size)
         self.max_pool = nn.AdaptiveAvgPool2d(1)
 
-    def forward(self, img, dlib, length, mode: bool):
+    def forward(self, img, dlib, length):
         img_features = self.efficient_net.extract_features(img[0])
         img_features = torch.unsqueeze(img_features, 0)
         for i in range(img.size(0) - 1):
@@ -173,15 +173,6 @@ class CNNConformer(nn.Module):
         dlib = self.liner(dlib)
         dlib = self.dropout(dlib)
         x = torch.cat([img, dlib], axis=2)
-        if mode:
-            batch = x.size(0)
-            for i in range(batch):
-                time_rand = torch.randint(size=(random.randint(0, 3),), high=img_features.size(1))
-                feature_rand = torch.randint(size=(random.randint(0, 3),), high=img_features.size(2))
-                for r in time_rand:
-                    x[i, r:r + 10, :] = 0
-                for r in feature_rand:
-                    x[i, :, r:r + 5] = 0
 
         x = self.conformer(x, length)
         x = self.decoder(x[0])
@@ -215,20 +206,6 @@ class CNNConformer2(nn.Module):
 
         img = self.max_pool(img_features)
         x = torch.flatten(img, start_dim=2)
-        # img = self.conformer_linear(img)
-        # dlib = self.liner(dlib)
-        # dlib = self.dropout(dlib)
-        # x = torch.cat([img, dlib], axis=2)
-        # if mode:
-        #     batch = x.size(0)
-        #     for i in range(batch):
-        #         time_rand = torch.randint(size=(random.randint(0, 3),), high=img_features.size(1))
-        #         feature_rand = torch.randint(size=(random.randint(0, 3),), high=img_features.size(2))
-        #         for r in time_rand:
-        #             x[i, r:r + 10, :] = 0
-        #         for r in feature_rand:
-        #             x[i, :, r:r + 5] = 0
-
         x = self.conformer(x, length)
         x = self.decoder(x[0])
         return x

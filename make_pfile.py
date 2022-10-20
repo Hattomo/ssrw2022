@@ -1,4 +1,3 @@
-from lib2to3.pytree import Base
 import os
 import platform
 import json
@@ -112,11 +111,10 @@ if __name__ == "__main__":
             checkpoint = torch.load(opts.resume)
             START_EPOCH = checkpoint['epoch']
             best_val = float('inf')
-            model.load_state_dict(checkpoint['model_state_dict'])  
+            model.load_state_dict(checkpoint['model_state_dict'])
         else:
             best_val = float('inf')
     else:
         best_val = float('inf')
 
     predict_test(model, testloader)
-

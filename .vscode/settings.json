@@ -4,5 +4,8 @@
     },
     "[txt]": {
         "files.insertFinalNewline": false
-    }
+    },
+    "python.analysis.extraPaths": [
+        "./h_lang"
+    ]
 }
