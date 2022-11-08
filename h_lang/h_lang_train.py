@@ -22,7 +22,7 @@ from torchinfo import summary
 from my_args import get_parser, set_debug_mode, set_release_mode
 from my_utils import my_util
 from my_dataset_phone import MyCollator, KDataset
-from my_model import PhonemeLangModelv2
+from my_model import PhonemeLangModelv3
 import makelabel
 import data_transform
 from torchinfo import summary
@@ -61,7 +61,7 @@ Processor  : {platform.processor()},\n\
 Platform   : {platform.platform()},\n\
 Machine    : {platform.machine()},\n\
 python     : {platform.python_version()},\n\
-Pytorch    : {torch.__version__}"                                                                                                                                                                                                      )
+Pytorch    : {torch.__version__}")
 # yapf: enable
 
 # save args
@@ -153,13 +153,13 @@ progress_logger.info("Defining model...")
 
 # Set model
 output_size = len(phones)
-model = PhonemeLangModelv2(phones=phones, opts=opts).to(DEVICE)
+model = PhonemeLangModelv3(phones=phones, opts=opts).to(DEVICE)
 progress_logger.info(f"Model : {model}")
 # TODO: Use torch summary (info?)
 # progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
 
 #- Set Loss func
-criterion = nn.CrossEntropyLoss(ignore_index=phones.index('_'), label_smoothing=0.1)
+criterion = nn.CrossEntropyLoss(ignore_index=phones.index('_'), label_smoothing=0.0)
 
 # 保存したものがあれば呼び出す
 progress_logger.info("call out checkpoint if exists...")
@@ -208,39 +208,42 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
     data_num = len(loader.dataset)  # テストデータの総数
     pbar = tqdm(total=int(data_num / opts.batch_size))
     model.train()
-    for batch, (inputs, targets) in enumerate(loader):
+    for batch, (inputs, targets, input_length) in enumerate(loader):
         # データをdeviceに載せる
         # 初期値
         targets = targets.to(DEVICE, non_blocking=True)
-        inputs = inputs.to(DEVICE, non_blocking=True)
+        inputs = inputs.to(DEVICE, non_blocking=True).float()
         decoder_output_length = targets.size(1)
-        outputs = model(inputs, decoder_output_length)
+        inputs = inputs.unsqueeze(2)
+        outputs = model(inputs)
         batch_size = inputs.size(0)
-        outputs_ = outputs.permute(0, 2, 1).softmax(2)
+        outputs_ = outputs.permute(0, 2, 1)
         ctc_loss = criterion(outputs_, targets)
         data_manager.update_loss(ctc_loss.data.item(), batch_size)
-        # result_text = ""
-        # for i in range(batch_size):
-        #     output = outputs[i]
-        #     label = targets[i]
-        #     _, output = output.max(dim=1)
-        #     pred = format_outputs(output)
-        #     output = [phones[l] for l in output]
-        #     pred = [phones[l] for l in pred]
-        #     label = [phones[l] for l in label if phones[l] not in "_"]
-        #     ter = my_util.calculate_error(pred, label)
-        #     data_manager.update_acc(ter, batch_size)
-        #     result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
-        #         pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
-        # result_logger.info(result_text)
+        result_text = ""
+        for i in range(batch_size):
+            if i == 0:
+                output = outputs[i]
+                label = targets[i]
+                _, output = output.max(dim=1)
+                pred = output[:input_length[i]]
+                pred = format_outputs(pred)
+                output = [phones[l] for l in output]
+                pred = [phones[l] for l in pred]
+                label = [phones[l] for l in label if phones[l] not in "_"]
+                ter = my_util.calculate_error(pred, label)
+                data_manager.update_acc(ter, batch_size)
+                result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
+                    pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
+        result_logger.info(result_text)
         ctc_loss.backward()  # calculate gradients
         torch.nn.utils.clip_grad_norm_(model.parameters(), opts.clip)  # clip gradients
         optimizer.step()
         optimizer.zero_grad()  # initlaize grad
         pbar.update(1)
     data_manager.write(epoch)
-    # with open("build/result.txt", mode='w') as f:
-        # f.write(result_text)
+    with open("build/result.txt", mode='w') as f:
+        f.write(result_text)
     pbar.close()
     progress_logger.info('Epoch: {0}\t'
                          'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(epoch, loss=data_manager.loss_manager.loss))
@@ -372,35 +375,35 @@ progress_logger.info(f"LOG : Train Started ...epoch {opts.end_epoch}まで")
 scaler = amp.GradScaler(enabled=opts.amp)
 for epoch in range(opts.start_epoch, opts.end_epoch + 1):
     train(trainloader, model, criterion, optimizer, scaler, epoch)
-    valid_loss = valid(validloader, model, criterion, epoch)
-    # save model
-    is_best = valid_loss <= best_val  # ロスが小さくなったか
-    # save model
-    if is_best:
-        valtrack = 0
-        best_val = valid_loss
-        best_epoch = epoch
-        my_util.save_checkpoint(
-            {  # modelの保存
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),  #必須
-                'best_val': best_val,
-                'optimizer_state_dict': optimizer.state_dict(),  #必須
-                "scaler": scaler.state_dict(),
-                'valtrack': valtrack,
-                'valid_loss': valid_loss
-            },
-            opts.checkpoint)
-    else:
-        valtrack += 1
-    test(testloader, model, epoch)
-    if opts.patience <= valtrack:
-        break
-    progress_logger.info(
-        f'Validation: {valid_loss} (best:{"{0:,.5f}".format(best_val)}) (valtrack:{"{0:,.5f}".format(valtrack)})')
+    # valid_loss = valid(validloader, model, criterion, epoch)
+    # # save model
+    # is_best = valid_loss <= best_val  # ロスが小さくなったか
+    # # save model
+    # if is_best:
+    #     valtrack = 0
+    #     best_val = valid_loss
+    #     best_epoch = epoch
+    #     my_util.save_checkpoint(
+    #         {  # modelの保存
+    #             'epoch': epoch,
+    #             'model_state_dict': model.state_dict(),  #必須
+    #             'best_val': best_val,
+    #             'optimizer_state_dict': optimizer.state_dict(),  #必須
+    #             "scaler": scaler.state_dict(),
+    #             'valtrack': valtrack,
+    #             'valid_loss': valid_loss
+    #         },
+    #         opts.checkpoint)
+    # else:
+    #     valtrack += 1
+    # test(testloader, model, epoch)
+    # if opts.patience <= valtrack:
+    #     break
+    # progress_logger.info(
+    #     f'Validation: {valid_loss} (best:{"{0:,.5f}".format(best_val)}) (valtrack:{"{0:,.5f}".format(valtrack)})')
 
-my_util.load_checkpoint(best_epoch, best_val, model, opts)
-test(testloader, model, 1000)
+# my_util.load_checkpoint(best_epoch, best_val, model, opts)
+# test(testloader, model, 1000)
 
 writer.close()  # close tensorboard writer
 progress_logger.info("Finish!!")
