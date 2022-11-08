@@ -87,13 +87,25 @@ class PhonemeLangModelv2(nn.Module):
         self.img_size = img_size
         self.vocab_size = vocab_size
         self.lstm_encoder = Encoder(phones, self.embed_size, self.hidden_dim_encoder, opts=opts)
-        self.lstm_decoder = Decoder(self.vocab_size,
-                                    self.embed_size,
-                                    self.hidden_dim_decoder,
-                                    phones,
-                                    opts=opts)
+        self.lstm_decoder = Decoder(self.vocab_size, self.embed_size, self.hidden_dim_decoder, phones, opts=opts)
 
     def forward(self, x, decoder_output_length):
         h = self.lstm_encoder(x)
         x = self.lstm_decoder(h, decoder_output_length, x.size(0))
+        return x
+
+class PhonemeLangModelv3(nn.Module):
+
+    def __init__(self, phones, opts) -> None:
+        super(PhonemeLangModelv3, self).__init__()
+        self.opts = opts
+        self.phones = phones
+        self.lstm = nn.LSTM(1, 128, num_layers=1, batch_first=True, bidirectional=True)
+        self.fc = nn.Linear(128 * 2, len(phones))
+
+    def forward(self, x):
+        h0 = torch.randn(2 * 1, x.shape[0], 128).to(self.opts.device)
+        c0 = torch.randn(2 * 1, x.shape[0], 128).to(self.opts.device)
+        x, state = self.lstm(x, (h0, c0))
+        x = self.fc(x)
         return x

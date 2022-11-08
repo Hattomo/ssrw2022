@@ -245,5 +245,5 @@ def calculate_error(hypothesis, reference):
     ter = TokenErrorRate(total_error, substitute_error, delete_error, insert_error, len_ref)
     return ter
 
-def calculate_error2(preds, target):
+def calculate_error_rate(preds, target):
     return torchmetrics.WordErrorRate(preds, target)

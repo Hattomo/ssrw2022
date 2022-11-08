@@ -80,7 +80,7 @@ def get_label_csv(label_path: str, phones: list) -> list:
     labels = []
     with open(label_path, "r") as f:
         lines = f.readlines()
-    for line in tqdm(lines):
+    for line in tqdm(lines[:10000]):
         line_list = []
         sentence = line.rstrip("\n").split(" ")
         if len(sentence) < 250:
