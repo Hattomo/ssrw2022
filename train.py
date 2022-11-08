@@ -6,6 +6,7 @@ import json
 from logging import getLogger, config
 from datetime import datetime
 import subprocess
+from sklearn import feature_extraction
 
 import torch
 import torch.nn as nn
@@ -22,7 +23,7 @@ from torchinfo import summary
 from my_args import get_parser, set_debug_mode, set_release_mode
 from my_utils import my_util
 from my_dataset_av import MyCollator, ROHANDataset
-from model import CNN3LSTMCTC, CNN2LSTMCTC, CNNConformer, CNNConformer2
+from model import CNN3LSTMCTC, CNN2LSTMCTC, CNNConformer, CNNConformerRES
 import makelabel
 import data_transform
 from torchinfo import summary
@@ -63,7 +64,6 @@ Machine    : {platform.machine()},\n\
 python     : {platform.python_version()},\n\
 Pytorch    : {torch.__version__}")
 # yapf: enable
-
 
 # save args
 with open(f"{opts.base_path}/args.json", 'wt') as f:
@@ -176,18 +176,30 @@ progress_logger.info(f"Model : {model}")
 # TODO: Use torch summary (info?)
 # progress_logger.info(summary(model, [(6, 237, 1, 128, 128), (6, 237, 136)],device=opts.device))
 
-for param in model.efficient_net.parameters():
+# for param in model.efficient_net.parameters():
+#     param.requires_grad = False
+# for param in model.efficient_net._fc.parameters():
+#     param.requires_grad = True
+# for param in model.efficient_net._bn1.parameters():
+#     param.requires_grad = True
+# for param in model.efficient_net._conv_head.parameters():
+#     param.requires_grad = True
+# for param in model.efficient_net._blocks[-1].parameters():
+#     param.requires_grad = True
+# for param in model.efficient_net._blocks[-2].parameters():
+#     param.requires_grad = True
+
+# for param in model.resnet18.parameters():
+#     param.requires_grad = False
+# for param in model.resnet18.layer4.parameters():
+#     param.requires_grad = True
+
+for param in model.feature_extractor.features.parameters():
     param.requires_grad = False
-for param in model.efficient_net._fc.parameters():
-    param.requires_grad = True
-for param in model.efficient_net._bn1.parameters():
-    param.requires_grad = True
-for param in model.efficient_net._conv_head.parameters():
-    param.requires_grad = True
-for param in model.efficient_net._blocks[-1].parameters():
-    param.requires_grad = True
-for param in model.efficient_net._blocks[-2].parameters():
-    param.requires_grad = True
+for name, param in model.feature_extractor.features.named_parameters():
+    if name[0] == str(7) or name[0] == str(8):
+        param.requires_grad = True
+
 
 #- Set Loss func
 criterion = nn.CTCLoss(blank=phones.index('_'), zero_infinity=False)
@@ -256,28 +268,29 @@ def train(loader, model, criterion, optimizer, scaler, epoch):
         outputs_ = outputs.permute(1, 0, 2).log_softmax(2)
         ctc_loss = criterion(outputs_, targets, input_lengths, target_lengths)
         data_manager.update_loss(ctc_loss.data.item(), batch_size)
-        result_text = ""
-        for i in range(batch_size):
-            output = outputs[i]
-            label = targets[i]
-            _, output = output.max(dim=1)
-            pred = format_outputs(output)
-            output = [phones[l] for l in output]
-            pred = [phones[l] for l in pred]
-            label = [phones[l] for l in label if phones[l] not in "_"]
-            ter = my_util.calculate_error(pred, label)
-            data_manager.update_acc(ter, batch_size)
-            result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
-                pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
-        result_logger.info(result_text)
+        # result_text = ""
+        # for i in range(batch_size):
+        #     output = outputs[i]
+        #     label = targets[i]
+        #     _, output = output.max(dim=1)
+        #     pred = format_outputs(output)
+        #     output = [phones[l] for l in output]
+        #     pred = [phones[l] for l in pred]
+        #     label = [phones[l] for l in label if phones[l] not in "_"]
+        #     ter = my_util.calculate_error(pred, label)
+        #     data_manager.update_acc(ter, batch_size)
+        #     result_text += "-"*50 + "\n\n---Output---\n" + " ".join(output) + "\n\n---Predict---\n" + " ".join(
+        #         pred) + "\n\n---Label---\n" + " ".join(label) + "\n\n"
+        # result_logger.info(result_text)
         ctc_loss.backward()  # calculate gradients
         torch.nn.utils.clip_grad_norm_(model.parameters(), opts.clip)  # clip gradients
         optimizer.step()
         optimizer.zero_grad()  # initlaize grad
         pbar.update(1)
+        del ctc_loss
     data_manager.write(epoch)
-    with open("build/result.txt", mode='w') as f:
-        f.write(result_text)
+    # with open("build/result.txt", mode='w') as f:
+    #     f.write(result_text)
     pbar.close()
     progress_logger.info('Epoch: {0}\t'
                          'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(epoch, loss=data_manager.loss_manager.loss))

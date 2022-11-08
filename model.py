@@ -1,4 +1,5 @@
 import random
+from tkinter import image_names
 from typing import Tuple
 import torch
 import torchvision.transforms as transforms
@@ -6,7 +7,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 import torchaudio
+import torchvision
 from efficientnet_pytorch import EfficientNet
+from torchvision.models.feature_extraction import create_feature_extractor
 
 class LSTM(nn.Module):
 
@@ -146,8 +149,12 @@ class CNNConformer(nn.Module):
         super(CNNConformer, self).__init__()
         self.liner = nn.Linear(136, 12)
         self.dropout = nn.Dropout(p=0.2, inplace=False)
-        self.conformer_linear = nn.Linear(1280, 268)
-        self.efficient_net = EfficientNet.from_pretrained('efficientnet-b0', in_channels=1)
+        self.conformer_linear = nn.Linear(1280, 268)#512
+        # self.efficient_net = EfficientNet.from_pretrained('efficientnet-b0', in_channels=1)
+        self.effeicient_net = torchvision.models.efficientnet_b0(pretrained=True)
+        self.feature_extractor = create_feature_extractor( self.effeicient_net, {"avgpool": "feature"})
+        self.cnn = nn.Conv2d(1, 3, kernel_size=(1, 1))
+
         self.conformer = torchaudio.models.Conformer(
             # yapf: disable
             input_dim=280,
@@ -160,10 +167,13 @@ class CNNConformer(nn.Module):
         self.max_pool = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, img, dlib, length):
-        img_features = self.efficient_net.extract_features(img[0])
+        img_features = self.cnn(img[0])
+        img_features = self.feature_extractor(img_features)["feature"]
+        print(img_features.size())
         img_features = torch.unsqueeze(img_features, 0)
         for i in range(img.size(0) - 1):
-            img_new_features = self.efficient_net.extract_features(img[i + 1])
+            img_new_features = self.cnn(img[i + 1])
+            img_new_features = self.feature_extractor(img_new_features)["feature"]
             img_new_features = torch.unsqueeze(img_new_features, 0)
             img_features = torch.cat([img_features, img_new_features], dim=0)
 
@@ -206,6 +216,48 @@ class CNNConformer2(nn.Module):
 
         img = self.max_pool(img_features)
         x = torch.flatten(img, start_dim=2)
+        x = self.conformer(x, length)
+        x = self.decoder(x[0])
+        return x
+
+class CNNConformerRES(nn.Module):
+
+    def __init__(self, hidden_size, output_size, opts) -> None:
+        super(CNNConformerRES, self).__init__()
+        self.liner = nn.Linear(136, 12)
+        self.dropout = nn.Dropout(p=0.2, inplace=False)
+        self.conformer_linear = nn.Linear(512, 268)
+        self.feature_extractor = create_feature_extractor(torchvision.models.resnet18(pretrained=True), {"avgpool": "feature"})
+        self.cnn = nn.Conv2d(1, 3, kernel_size=(1, 1))
+
+        self.conformer = torchaudio.models.Conformer(
+            # yapf: disable
+            input_dim=280,
+            num_heads=4,
+            ffn_dim=144,
+            num_layers=16,
+            depthwise_conv_kernel_size=31)
+        # yapf: enable
+        self.decoder = nn.Linear(280, output_size)
+        self.max_pool = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, img, dlib, length):
+        img_features = self.cnn(img[0])
+        img_features = self.feature_extractor(img_features)["feature"]
+        img_features = torch.unsqueeze(img_features, 0)
+        for i in range(img.size(0) - 1):
+            img_new_features = self.cnn(img[i + 1])
+            img_new_features = self.feature_extractor(img_new_features)["feature"]
+            img_new_features = torch.unsqueeze(img_new_features, 0)
+            img_features = torch.cat([img_features, img_new_features], dim=0)
+
+        img = self.max_pool(img_features)
+        img = torch.flatten(img, start_dim=2)
+        img = self.conformer_linear(img)
+        dlib = self.liner(dlib)
+        dlib = self.dropout(dlib)
+        x = torch.cat([img, dlib], axis=2)
+
         x = self.conformer(x, length)
         x = self.decoder(x[0])
         return x
